@@ -23,21 +23,6 @@ client_id = None #prefix this to every message. get told this bv server
 #server.connect((HOST, PORT))
 #print(f"connected to {HOST}:{PORT}")
         
-def connect(sock, host, port, username):
-    print(f"Connecting to {host}:{port}...", end=" ")
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((host, port))
-    print(f"success!")
-    #data = sock.recv(1024)
-    #print(f"Received id {data!r}")
-    
-    # get username here
-    sock.sendall(f"/user {username}".encode())
-    #data = sock.recv(1024)
-    #print(f"Received {data!r}")
-
-connect(server, HOST, PORT, "test")
-
 while prompt_response := input("> ").strip():
     if prompt_response == "%help":
         print("Commands:")
@@ -58,7 +43,17 @@ while prompt_response := input("> ").strip():
         port = int(port)
         # connect to the server
         try:
-            connect(server, host, port, username)
+            print(f"Connecting to {host}:{port}...", end=" ")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((host, port))
+            print(f"success!")
+            #data = sock.recv(1024)
+            #print(f"Received id {data!r}")
+            
+            # get username here
+            sock.sendall(f"/user {username}".encode())
+            #data = sock.recv(1024)
+            #print(f"Received {data!r}")
         except socket.gaierror:
             print(f"failure. Name or service not known '{host}'")
         except ConnectionRefusedError:
