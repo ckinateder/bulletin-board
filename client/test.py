@@ -26,10 +26,10 @@ class Client:
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((HOST, PORT))
         self.s.sendall(f"/user {self.username}".encode())  # send the username
-        data = self.s.recv(1024)
-        if data.decode('utf-8').strip()[:8] == "/success":
+        data = self._receive()
+        if data[:8] == "/success":
             print(f"success! Your username is '{self.username}'")
-        if data.decode('utf-8').strip()[:5] == "/fail":
+        elif data[:5] == "/fail":
             print(f"fail. Username '{
                   self.username}' already taken. Please choose another.")
             self.s.close()
@@ -62,15 +62,15 @@ class Client:
             else:
                 print("invalid command")
 
-
-def receive(s):
-    data = s.recv(1024).decode('utf-8').strip()
-    print(f"Receieved '{data}'")
-    if not data:
-        s.close()
-        print(f"Connection from {HOST} closed.")
-        s = None
-    return data
+    def _receive(self, buffer_size=1024, echo=True):
+        data = self.s.recv(buffer_size).decode('utf-8').strip()
+        if echo:
+            print(f"receieved '{data}'")
+        if not data:
+            self.s.close()
+            print(f"Connection from {HOST} closed.")
+            self.s = None
+        return data
 
 
 if __name__ == "__main__":
