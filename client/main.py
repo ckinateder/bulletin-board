@@ -1,7 +1,7 @@
 import socket
 
 HOST = "127.0.0.1"  # The server's hostname or IP address
-PORT = 65432  # The port used by the server
+PORT = 65431 # The port used by the server
 
 print("Welcome! Type 'help' for a list of commands.")
 """
@@ -17,6 +17,26 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 """
 server = None # not connected yet
 host, port = None, None
+client_id = None #prefix this to every message. get told this bv server
+
+#server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#server.connect((HOST, PORT))
+#print(f"connected to {HOST}:{PORT}")
+        
+def connect(sock, host, port, username):
+    print(f"Connecting to {host}:{port}...", end=" ")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((host, port))
+    print(f"success!")
+    #data = sock.recv(1024)
+    #print(f"Received id {data!r}")
+    
+    # get username here
+    sock.sendall(f"/user {username}".encode())
+    #data = sock.recv(1024)
+    #print(f"Received {data!r}")
+
+connect(server, HOST, PORT, "test")
 
 while prompt_response := input("> ").strip():
     if prompt_response == "%help":
@@ -29,18 +49,20 @@ while prompt_response := input("> ").strip():
         if server:
             print(f"You are already connected to {host}:{port}, please disconnect first.")
             continue
+        # get the username
+        username = input("Enter your username: ")
+
         # parse the response to get the host and port
         host, port = prompt_response[9:].split(":")
         host = host.strip()
         port = int(port)
         # connect to the server
-        print(f"Connecting to {host}:{port}...", end=" ")
         try:
-            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server.connect((host, port))
-            print(f"success!")
+            connect(server, host, port, username)
         except socket.gaierror:
             print(f"failure. Name or service not known '{host}'")
+        except ConnectionRefusedError:
+            print(f"failure. Connection refused by '{host}:{port}'")
         except Exception as e:
             print("failure. Unknown error.")
 
