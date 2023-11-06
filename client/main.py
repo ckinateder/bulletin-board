@@ -1,6 +1,6 @@
 import socket
 HOST = "127.0.0.1"  # The server's hostname or IP address
-PORT = 64438  # The port used by the server
+PORT = 64538  # The port used by the server
 
 print("Welcome! Type '/help' for a list of commands.")
 
