@@ -11,7 +11,7 @@ class Client:
         self.id = None
         self.get_username()
 
-    def validate_username(self, username:str)->bool:
+    def validate_username(self, username: str) -> bool:
         """Validates the username."""
         restrictions = [" ", ":", "/", "\\", "<", ">", "|", "?", "*"]
         if username == "" or any([r in username for r in restrictions]):
@@ -36,7 +36,7 @@ class Client:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.connect((self.host, self.port))
 
-            if self.id: # this is a reconnection
+            if self.id:  # this is a reconnection
                 self._send(f"/reconnect {self.username}:{self.id}")
                 data = self._receive()
                 if data[:8] == "/success":
@@ -53,9 +53,7 @@ class Client:
                     self.get_username()
                     self.connect()
                 elif data[:11] == "/fail no_id":
-                    print(
-                        "fail. Creating new user identity."
-                    )
+                    print("fail. Creating new user identity.")
                     self.disconnect()
                     self.id = None
                     self.connect()
@@ -64,13 +62,12 @@ class Client:
                     self.disconnect()
                     return
 
-
             self._send(f"/connect {self.username}")  # send the username
             data = self._receive()
             if data[:8] == "/success":
                 response = data[9:].strip().split(":")
                 self.id = response[1]
-                assert response[0] == self.username # make sure the username is correct
+                assert response[0] == self.username  # make sure the username is correct
                 print(
                     f"success! Your username is '{self.username}'. Your id is '{self.id}'"
                 )
@@ -94,7 +91,9 @@ class Client:
         if self.s:
             self.s.close()
             self.s = None
-            print(f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.")
+            print(
+                f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect."
+            )
         else:
             print("You are not connected to a server.")
 
@@ -103,7 +102,7 @@ class Client:
         print("Commands:")
         print("/connect <host>:<port> - connect to a server")
         print("/disconnect - disconnect from the server")
-        print("/send <message> - send a message to the server") # remove later
+        print("/send <message> - send a message to the server")  # remove later
         print("/setuser <username> - set your username")
         print("/exit - exit the program")
 
@@ -154,13 +153,13 @@ class Client:
         else:
             print("You are not connected to a server.")
 
-    def change_username(self, new_username:str):
+    def change_username(self, new_username: str):
         """Changes the username.
 
         Args:
             new_username (str): The new username.
         """
-        if not self.s: # if not connected to a server it doesn't need update
+        if not self.s:  # if not connected to a server it doesn't need update
             self.username = new_username
             return
 
