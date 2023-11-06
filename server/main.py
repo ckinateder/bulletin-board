@@ -247,6 +247,14 @@ def on_new_client(
         elif data[:5] == "/join":
             # join a board
             board_name = data[6:].strip()  # get the board name
+
+            if board:  # if the user is already on a board
+                if board.name == board_name:
+                    send_to_client(client_socket, f"/success {board_name}")
+                    continue  # already on that board
+                else:  # user is on a different board so leave and join new one
+                    lobby.remove_user_from_board(user, board.name)
+
             board = lobby.get_board_by_name(board_name)  # get the board
             if board:  # board exists
                 lobby.add_user_to_board(user, board_name)
