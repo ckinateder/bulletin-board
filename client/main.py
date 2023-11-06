@@ -9,6 +9,7 @@ class Client:
         self.s = None
         self.username = ""
         self.id = None
+        self.current_board = None
         self.get_username()
 
     def validate_username(self, username: str) -> bool:
@@ -48,15 +49,13 @@ class Client:
                     return
                 elif data[:16] == "/fail name_taken":
                     print(
-                        f"fail. Username '{self.username}' already taken. Please choose another."
+                        f"fail. Username '{self.username}' already taken. Please choose another and try again."
                     )
                     self.get_username()
-                    self.connect()
                 elif data[:11] == "/fail no_id":
-                    print("fail. Creating new user identity.")
+                    print("fail. Killing corrupted user identity. Try again.")
                     self.disconnect()
                     self.id = None
-                    self.connect()
                 else:
                     print("fail. Unknown error.")
                     self.disconnect()
@@ -104,6 +103,9 @@ class Client:
         print("/disconnect - disconnect from the server")
         print("/send <message> - send a message to the server")  # remove later
         print("/setuser <username> - set your username")
+        print("/join <board_name> - join a board")
+        print("/leave - leave the current board")
+
         print("/exit - exit the program")
 
     def parse_connect(self, prompt_response):
@@ -144,6 +146,7 @@ class Client:
             data = self._receive()
             if data[:8] == "/success":
                 print(f"Joined board '{board_name}'")
+                self.current_board = board_name
             elif data[:5] == "/fail":
                 print(f"Failed to join board '{board_name}'.")
             else:
@@ -152,6 +155,23 @@ class Client:
                 self.s = None
         else:
             print("You are not connected to a server.")
+
+    def leave_board(self):
+        """Leaves the current board."""
+        if self.s and self.current_board:
+            self._send("/leave")
+            data = self._receive()
+            if data[:8] == "/success":
+                print(f"Left board '{self.current_board}'")
+                self.current_board = None
+            elif data[:5] == "/fail":
+                print(f"Failed to leave board '{self.current_board}'.")
+            else:
+                print("fail. Unknown error.")
+                self.s.close()
+                self.s = None
+        else:
+            print("You are not connected to a server and board.")
 
     def change_username(self, new_username: str):
         """Changes the username.
@@ -175,6 +195,22 @@ class Client:
             self.s.close()
             self.s = None
 
+    def get_users_in_board(self):
+        if self.s and self.current_board:
+            self._send("/users")
+            data = self._receive()
+            if data[:8] == "/success":
+                users = data[9:].strip().split(":")
+                print(f"Users in board '{self.current_board}': {', '.join(users)}")
+            elif data[:5] == "/fail":
+                print(f"Failed to get users in board '{self.current_board}'.")
+            else:
+                print("fail. Unknown error.")
+                self.s.close()
+                self.s = None
+        else:
+            print("You are not connected to a server and board.")
+
     def main(self):
         """Main loop."""
         while prompt_response := input(f"{self.username}> ").strip():
@@ -197,10 +233,14 @@ class Client:
                 self._send(prompt_response[6:])
             elif prompt_response[:5] == "/join":
                 if len(prompt_response) < 7:
-                    board_name = "default"
+                    board_name = "default"  # just for part 1
                 else:
                     board_name = prompt_response[6:].strip()
                 self.join(board_name)
+            elif prompt_response[:6] == "/leave":
+                self.leave_board()
+            elif prompt_response[:6] == "/users":
+                self.get_users_in_board()
             elif prompt_response[:5] == "/exit":
                 print("bye!")
                 self.disconnect()

@@ -39,6 +39,8 @@ class Log:
             print(f"{record}")
 
     def __str__(self):
+        if len(self.log) == 0:
+            return "Log(log=[])"
         s = "ConnectionsLog(log=[\n"
         for entry in self.log:
             s += f"  {entry}\n"
@@ -55,6 +57,9 @@ class User:
         self.id = hex(hash(str(time.time()) + username))
         self.connected = False
 
+    def __eq__(self, other):
+        return self.id == other.id
+
     def __str__(self):
         return (
             f"User(username={self.username}, id={self.id}, connected={self.connected})"
@@ -69,22 +74,22 @@ class UserContainer:
         self.users = []
 
     def add_user(self, user: User):
+        for u in self.users:
+            if user == u:  # user already exists
+                return False
         self.users.append(user)
+        return True
 
     def remove_user(self, user: User):
         for u in self.users:
-            if u.id == user.id:
+            if user == u:
                 self.users.remove(user)
+                return True
+        return False
 
     def get_user_by_id(self, userid: str):
         for user in self.users:
             if user.id == userid:
-                return user
-        return None
-
-    def get_user_by_username(self, username: str):
-        for user in self.users:
-            if user.username == username:
                 return user
         return None
 
@@ -131,6 +136,24 @@ class Lobby:
     def new_board(self, name: str):
         self.boards.append(Board(name))
 
+    def add_user_to_lobby(self, user: User):
+        self.users.add_user(user)
+        self.log.add(user.id, "connect")  # log the connection
+
+    def add_user_to_board(self, user: User, board_name: str):
+        self.get_board_by_name(board_name).users.add_user(user)
+        self.log.add(user.id, "board_join", board_name)
+
+    def remove_user_from_board(self, user: User, board_name: str):
+        self.get_board_by_name(board_name).users.remove_user(user)
+        self.log.add(user.id, "board_leave", board_name)
+
+    def get_board_by_name(self, name: str):
+        for board in self.boards:
+            if board.name == name:
+                return board
+        return None
+
 
 def send_to_client(client_socket: socket.socket, data: str):
     """Sends data to a client."""
@@ -149,6 +172,7 @@ def on_new_client(
         lobby (Lobby): global lobby
     """
     user = None
+    board = None  # the board the user is currently viewing
     while True:
         # receive data from client
         data = client_socket.recv(1024).decode("utf-8").strip()
@@ -169,41 +193,35 @@ def on_new_client(
             ):  # unsuccessful
                 send_to_client(
                     client_socket,
-                    f"/fail name_taken {' '.join(lobby.users.get_all_usernames())}",
+                    f"/fail name_taken {':'.join(lobby.users.get_all_usernames())}",
                 )
             else:  # successful
                 user = User(username, client_socket)  # create the user
                 user.connected = True  # connect the user
-                lobby.users.add_user(user)  # add the user to the list of users
+                lobby.add_user_to_lobby(user)  # add the user to the list of users
                 send_to_client(
                     client_socket, f"/success {username}:{user.id}"
                 )  # send the success message
-                lobby.log.add(user.id, "connect")  # log the connection
         elif data[:10] == "/reconnect":  # /reconnect <username>:<id>
             info = data[11:].strip()
             username, userid = info.split(":")  # get the username and id
-            print([username, userid])
             user = lobby.users.get_user_by_id(userid)  # get the user
-            print(user)
 
-            if (
-                user and user.username != username
-            ):  # user exists but username is wrong, name may have been changed
-                if (
-                    username in lobby.users.get_all_usernames()
-                ):  # unsuccessful, user already exists, pick a new one
+            if user and user.username != username:
+                # user exists but username is wrong, name may have been changed
+                if username in lobby.users.get_all_usernames():
+                    # unsuccessful, user already exists, pick a new one
                     send_to_client(
                         client_socket,
-                        f"/fail name_taken {' '.join(lobby.users.get_all_usernames())}",
+                        f"/fail name_taken {':'.join(lobby.users.get_all_usernames())}",
                     )
                 else:  # successful, user exists but username is wrong, name may have been changed
                     user.username = username
-                    send_to_client(client_socket, f"/success {username}:{user.id}")
                     lobby.log.add(user.id, "reconnect")  # log the reconnection
                     lobby.log.add(user.id, "username_change", username)
-            elif (
-                user and user.username == username
-            ):  # successful, user exists and username is correct
+                    send_to_client(client_socket, f"/success {username}:{user.id}")
+            elif user and user.username == username:
+                # successful, user exists and username is correct
                 send_to_client(
                     client_socket, f"/success {username}:{user.id}"
                 )  # send the success message
@@ -219,21 +237,48 @@ def on_new_client(
             elif username in lobby.users.get_all_usernames() or username == "":
                 send_to_client(
                     client_socket,
-                    f"/fail name_taken {' '.join(lobby.users.get_all_usernames())}",
+                    f"/fail name_taken {':'.join(lobby.users.get_all_usernames())}",
                 )
             else:
                 user.username = username
-                send_to_client(client_socket, f"/success {username}:{user.id}")
                 lobby.log.add(user.id, "username_change", username)
-
+                send_to_client(client_socket, f"/success {username}:{user.id}")
         elif data[:5] == "/join":
-            board_name = data[6:].strip()
+            # join a board
+            board_name = data[6:].strip()  # get the board name
+            board = lobby.get_board_by_name(board_name)  # get the board
+            if board:  # board exists
+                lobby.add_user_to_board(user, board_name)
+                send_to_client(client_socket, f"/success {board_name}")
+            else:  # board does not exist
+                send_to_client(client_socket, f"/fail {board_name}")
+        elif data[:6] == "/leave":
+            # leave a board
+            if board:
+                lobby.remove_user_from_board(user, board.name)
+                send_to_client(client_socket, f"/success {board.name}")
+            else:
+                send_to_client(client_socket, "/fail no_board")
+        elif data[:6] == "/users":
+            # get all users
+            if board:
+                send_to_client(
+                    client_socket,
+                    f"/success {':'.join(board.users.get_all_usernames())}",
+                )
+            else:
+                send_to_client(client_socket, "/fail no_board")
+
+        if not user:
+            print("user not logged in.")
 
     # close the connection
     client_socket.close()
 
     # if the user was logged in, remove them from the users list and log the disconnection
     if user:
+        if board:
+            lobby.remove_user_from_board(user, board.name)
         user.connected = False
         lobby.log.add(user.id, "disconnect")
     print(f"Connection from {addr} closed.")
