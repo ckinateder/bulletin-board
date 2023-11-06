@@ -1,4 +1,5 @@
 import socket
+import readline
 
 
 class Client:
@@ -96,31 +97,35 @@ class Client:
 
     def main(self):
         """Main loop."""
-        while prompt_response := input("> ").strip():
-            if prompt_response == "/help":
-                self.help()
-            elif prompt_response[:8] == "/setuser":
-                given_username = prompt_response[9:].strip()
-                if given_username == "" or " " in given_username:
-                    print("Come on, man! Your username cannot contain spaces.")
-                    continue
-                self.username = given_username
-                print(f"Username set to '{self.username}'")
-            elif prompt_response[:8] == "/connect":
-                resp = self.parse_connect(prompt_response)
-                if resp:
-                    self.host, self.port = resp
-                    self.connect()
-            elif prompt_response[:11] == "/disconnect":
-                self.disconnect()
-            elif prompt_response[:5] == "/send":
-                self._send(prompt_response[6:])
-            elif prompt_response[:5] == "/exit":
-                print("bye!")
-                self.disconnect()
-                break
-            else:
-                print("invalid command")
+        try:
+            while prompt_response := input(f"{self.username}> ").strip():
+                if prompt_response == "/help":
+                    self.help()
+                elif prompt_response[:8] == "/setuser":
+                    given_username = prompt_response[9:].strip()
+                    if given_username == "" or " " in given_username:
+                        print("Come on, man! Your username cannot contain spaces.")
+                        continue
+                    self.username = given_username
+                    print(f"Username set to '{self.username}'")
+                elif prompt_response[:8] == "/connect":
+                    resp = self.parse_connect(prompt_response)
+                    if resp:
+                        self.host, self.port = resp
+                        self.connect()
+                elif prompt_response[:11] == "/disconnect":
+                    self.disconnect()
+                elif prompt_response[:5] == "/send":
+                    self._send(prompt_response[6:])
+                elif prompt_response[:5] == "/exit":
+                    print("bye!")
+                    self.disconnect()
+                    break
+                else:
+                    print("invalid command")
+        except KeyboardInterrupt:
+            print("\nbye!")
+            self.disconnect()
 
     def _receive(self, buffer_size=1024, echo=True):
         data = self.s.recv(buffer_size).decode("utf-8").strip()

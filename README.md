@@ -44,8 +44,19 @@ inspired by Minecraft's protocol.
 | `/groups` | list all groups | `/groups` |
 | `/users` | list all users in the current group | `/users` |
 
-## Usage
-Make sure you are in the dev container. Otherwise, any standard implementation of Python 3.12 should work.
+## Server Design
 
-From the root directory of this project, start the server with `python server/main.py --host <host> --port <port>`. Then, start the client with `python client/main.py`. The client will prompt you for a command. Type `/connect <host>:<port>` to connect to the server. Then, you can type `/disconnect` to disconnect from the server. **For development, I made the server create a `.env` file to pass the host and port the server is on to the client. I'll remove it later.**
+The server is a standalone process that listens on a port. It accepts connections from clients and spawns a new thread
+for each client. The server keeps track of all connected clients and the groups they are in. The server also keeps track
+of all messages posted to the board. The server is responsible for sending messages to clients. The server is also
+responsible for sending messages to other clients when a client joins or leaves a group.
+
+There exists a `Lobby`, which holds multiple `Board`s. A `Board` holds multiple `Message`s and multiple `User`s. A `User`
+can be in multiple `Board`s. A `User` can post a `Message` to a `Board`. A `User` can also join or leave a `Board`.
+A `Message` has one `User` as its author. A `Message` also has a `Board` as its parent. A `Board` has a `Lobby` as its parent.
+
+## Usage
+Make sure you are in the dev container if you are in VSCode. Otherwise, any standard implementation of Python 3.11 or higher will work.
+
+From the root directory of this project, start the server with `python server/main.py --host <host> --port <port>`. Then, start the client with `python client/main.py`. The client will prompt you to enter your username and then for commands. Type `/connect <host>:<port>` to connect to the server. Then, you can type `/disconnect` to disconnect from the server. **For development, I made the server create a `.env` file to pass the host and port the server is on to the client. I'll remove it later.**
 

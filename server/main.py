@@ -25,7 +25,14 @@ class Log:
     def __init__(self):
         self.log = []
 
-    def add(self, id: str, type: str, data=None):
+    def add(self, id: str, type: str, data: str = None):
+        """Add an entry to the log.
+
+        Args:
+            id (str): id
+            type (str): type of entry
+            data (str, optional): any extra info. Defaults to None.
+        """
         self.log.append({id: {"time": time.time(), "type": type, "data": data}})
 
     def __str__(self):
@@ -36,27 +43,39 @@ class Log:
         return s
 
 
+class User:
+    """User object. Contains username, socket, and id."""
+
+    def __init__(self, username: str, sock: socket.socket):
+        self.username = username
+        self.socket = sock
+        self.id = hex(hash(str(time.time()) + username))
+
+    def __str__(self):
+        return f"User(username={self.username}, id={self.id})"
+
+
 class UserContainer:
     """Container for users. Contains methods for adding, removing, and getting users."""
 
     def __init__(self):
         self.users = []
 
-    def add_user(self, user):
+    def add_user(self, user: User):
         self.users.append(user)
 
-    def remove_user(self, user):
+    def remove_user(self, user: User):
         for u in self.users:
             if u.id == user.id:
                 self.users.remove(user)
 
-    def get_user_by_id(self, userid):
+    def get_user_by_id(self, userid: str):
         for user in self.users:
             if user.id == userid:
                 return user
         return None
 
-    def get_user_by_username(self, username):
+    def get_user_by_username(self, username: str):
         for user in self.users:
             if user.username == username:
                 return user
@@ -81,27 +100,15 @@ class UserContainer:
         return iter(self.users)
 
 
-class User:
-    """User object. Contains username, socket, and id."""
-
-    def __init__(self, username, sock):
-        self.username = username
-        self.socket = sock
-        self.id = hex(hash(str(time.time()) + username))
-
-    def __str__(self):
-        return f"User(username={self.username}, id={self.id})"
-
-
 class Board:
     """Bulletin board object. Contains messages and users."""
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
         self.messages = []
         self.users = UserContainer()  # users who are currently viewing this board
 
-    def send_to_all_clients(self, data):
+    def send_to_all_clients(self, data: str):
         for u in self.users:
             send_to_client(u.socket, data)
 
@@ -114,17 +121,17 @@ class Lobby:
         self.log = Log()
         self.boards = []
 
-    def new_board(self, name):
+    def new_board(self, name: str):
         self.boards.append(Board(name))
 
 
-def send_to_client(client_socket, data):
+def send_to_client(client_socket: socket.socket, data: str):
     """Sends data to a client."""
     client_socket.sendall(data.encode())
     print(f"Sent '{data}' to {client_socket.getpeername()}")
 
 
-def on_new_client(client_socket, addr, lobby: Lobby):
+def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby):
     user = None
     while True:
         # receive data from client
@@ -165,22 +172,34 @@ def on_new_client(client_socket, addr, lobby: Lobby):
 
 
 def main(host: str, port: int, lobby: Lobby):
+    """Runs the server.
+
+    Args:
+        host (str): host
+        port (int): port
+        lobby (Lobby): lobby
+    """
     s = socket.socket()
     s.bind((host, port))  # bind the socket to the port and ip address
 
     s.listen(5)  # wait for new connections
 
-    while True:
-        c, addr = s.accept()  # Establish connection with client.
-        # this returns a new socket object and the IP address of the client
-        print(f"New connection from: {addr}")
-        c.sendall("".encode())
-        thread = Thread(
-            target=on_new_client, args=(c, addr, lobby)
-        )  # create the thread
-        thread.start()  # start the thread
-    c.close()
-    thread.join()
+    try:
+        while True:
+            c, addr = s.accept()  # Establish connection with client.
+            # this returns a new socket object and the IP address of the client
+            print(f"New connection from: {addr}")
+            c.sendall("".encode())
+            thread = Thread(
+                target=on_new_client, args=(c, addr, lobby)
+            )  # create the thread
+            thread.start()  # start the thread
+        c.close()
+        thread.join()
+    except KeyboardInterrupt:
+        print("Closing server...")
+        s.close()
+        sys.exit()
 
 
 if __name__ == "__main__":
@@ -205,4 +224,5 @@ if __name__ == "__main__":
     boards.new_board("general")
 
     # run the server
+    print(f"Welcome to the Bulletin Board Server! Listening on {args.host}:{args.port}...")
     main(args.host, args.port, boards)
