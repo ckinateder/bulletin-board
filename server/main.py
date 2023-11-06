@@ -2,40 +2,61 @@
 
 from threading import Thread
 import socket
+import time
 import selectors
 import types
 
 HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
-PORT = 65439 # Port to listen on (non-privileged ports are > 1023)
+PORT = 64438 # Port to listen on (non-privileged ports are > 1023)
 
-users = []
+# this is the current list of users.
+users = {} # id: username
+# realtime log of connections and disconnections. {id: {time: time, type: connect/disconnect}}
+connections_log = []
 
 def send_to_client(client_socket, data):
     client_socket.sendall(data.encode())
     print(f"Sent '{data}' to {client_socket.getpeername()}")
 
 def on_new_client(client_socket, addr):
-    username = ""
+    hsh = None
     while True:
+        # receive data from client
         data = client_socket.recv(1024).decode('utf-8').strip()
         if not data:
             break
-        print(f"{addr} >> {data}")
+
+        # show what was said
+        if hsh:
+            print(f"{users[hsh]} >> {data}")
+        else:
+            print(f"{addr} >> {data}")
+        
+        # handle commands
         if data[:5] == "/user":
             username = data[6:].strip()
-            if username in users or username == "":
+            if username in list(users.values()) or username == "": # unsuccessful
                 send_to_client(client_socket, f"/fail {' '.join(users)}")
                 break
-            else:
-                users.append(username.strip())
-                send_to_client(client_socket, f"/success {username}")
+            else: # successful
+                hsh = hex(hash(str(time.time())+username))
+                users[hsh] = username
+                send_to_client(client_socket, f"/success {hsh}")
+                connections_log.append({"id": {"time": time.time(), "type": "connect"}})
+
+    # close the connection
     client_socket.close()
-    users.remove(username)
+
+    # if the user was logged in, remove them from the users list and log the disconnection
+    if hsh:
+        del users[hsh]
+        connections_log.append({"id": {"time": time.time(), "type": "disconnect"}})
     print(f"Connection from {addr} closed.")
+    print(f"users: {users}")
+    print(f"connections_log: {connections_log}")
 
 
 def main():
-
     s = socket.socket()
     s.bind((HOST, PORT))  # bind the socket to the port and ip address
 
