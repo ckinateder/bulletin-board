@@ -53,12 +53,14 @@ class User:
         self.username = username
         self.socket = sock
         self.id = hex(hash(str(time.time()) + username))
-
+        self.connected = False
+    
     def __str__(self):
-        return f"User(username={self.username}, id={self.id})"
+        return f"User(username={self.username}, id={self.id}, connected={self.connected})"
 
 
 class UserContainer:
+
     """Container for users. Contains methods for adding, removing, and getting users."""
 
     def __init__(self):
@@ -71,7 +73,7 @@ class UserContainer:
         for u in self.users:
             if u.id == user.id:
                 self.users.remove(user)
-
+    
     def get_user_by_id(self, userid: str):
         for user in self.users:
             if user.id == userid:
@@ -135,6 +137,13 @@ def send_to_client(client_socket: socket.socket, data: str):
 
 
 def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby): # one thread per user
+    """Handles a client. One thread for each client.
+
+    Args:
+        client_socket (socket.socket): client socket
+        addr (tuple): address of client
+        lobby (Lobby): global lobby
+    """
     user = None
     while True:
         # receive data from client
@@ -149,19 +158,41 @@ def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby): # on
             print(f"{addr} >> {data}")
 
         # handle commands
-        if data[:8] == "/newuser":
+        if data[:8] == "/connect": # /newuser <username>
             username = data[9:].strip()
             if (
                 username in lobby.users.get_all_usernames() or username == ""
             ):  # unsuccessful
 
-                send_to_client(client_socket, f"/fail {' '.join(lobby.users.get_all_usernames())}")
+                send_to_client(client_socket, f"/fail name_taken {' '.join(lobby.users.get_all_usernames())}")
             else:  # successful
-                user = User(username, client_socket)
-                lobby.users.add_user(user)
-                send_to_client(client_socket, f"/success {username}:{user.id}")
-                lobby.log.add(user.id, "connect", user.username)
-        if data[:8] == "/chguser":
+                user = User(username, client_socket) # create the user
+                user.connected = True # connect the user
+                lobby.users.add_user(user) # add the user to the list of users
+                send_to_client(client_socket, f"/success {username}:{user.id}") # send the success message
+                lobby.log.add(user.id, "connect") # log the connection
+        elif data[:10] == "/reconnect": # /reconnect <username>:<id>
+            info = data[11:].strip()
+            username, userid = info.split(":") # get the username and id
+            print([username, userid])
+            user = lobby.users.get_user_by_id(userid) # get the user
+            print(user)
+
+            if user and user.username != username: # user exists but username is wrong, name may have been changed
+                if username in lobby.users.get_all_usernames(): # unsuccessful, user already exists, pick a new one
+                    send_to_client(client_socket, f"/fail name_taken {' '.join(lobby.users.get_all_usernames())}") 
+                else: # successful, user exists but username is wrong, name may have been changed
+                    user.username = username
+                    send_to_client(client_socket, f"/success {username}:{user.id}")
+                    lobby.log.add(user.id, "reconnect") # log the reconnection
+                    lobby.log.add(user.id, "username_change", username)
+            elif user and user.username == username: # successful, user exists and username is correct
+                send_to_client(client_socket, f"/success {username}:{user.id}") # send the success message
+                user.connected = True # connect the user
+                lobby.log.add(user.id, "reconnect") # log the reconnection
+            else: # unsuccessful, user not found, must connect with no id
+                send_to_client(client_socket, "/fail no_id")
+        elif data[:8] == "/chguser": # /chguser <username>:<id>
             info = data[9:].strip()
             username, userid = info.split(":")
             if user.id != userid: # unsuccessful
@@ -169,7 +200,7 @@ def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby): # on
             elif (
                 username in lobby.users.get_all_usernames() or username == ""
             ):
-                send_to_client(client_socket, f"/fail {' '.join(lobby.users.get_all_usernames())}")
+                send_to_client(client_socket, f"/fail name_taken {' '.join(lobby.users.get_all_usernames())}")
             else:
                 user.username = username
                 send_to_client(client_socket, f"/success {username}:{user.id}")
@@ -184,8 +215,8 @@ def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby): # on
 
     # if the user was logged in, remove them from the users list and log the disconnection
     if user:
-        lobby.users.remove_user(user)
-        lobby.log.add(user.id, "disconnect", user.username)
+        user.connected = False
+        lobby.log.add(user.id, "disconnect")
     print(f"Connection from {addr} closed.")
     print(f"users: {lobby.users}")
     print(lobby.log)

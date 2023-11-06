@@ -35,7 +35,37 @@ class Client:
             print(f"Connecting to {self.host}: {self.port}...", end=" ")
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.connect((self.host, self.port))
-            self.s.sendall(f"/newuser {self.username}".encode())  # send the username
+
+            if self.id: # this is a reconnection
+                self._send(f"/reconnect {self.username}:{self.id}")
+                data = self._receive()
+                if data[:8] == "/success":
+                    response = data[9:].strip().split(":")
+                    assert response[0] == self.username and response[1] == self.id
+                    print(
+                        f"success! Your username is '{self.username}'. Your id is '{self.id}'"
+                    )
+                    return
+                elif data[:16] == "/fail name_taken":
+                    print(
+                        f"fail. Username '{self.username}' already taken. Please choose another."
+                    )
+                    self.get_username()
+                    self.connect()
+                elif data[:11] == "/fail no_id":
+                    print(
+                        "fail. Creating new user identity."
+                    )
+                    self.disconnect()
+                    self.id = None
+                    self.connect()
+                else:
+                    print("fail. Unknown error.")
+                    self.disconnect()
+                    return
+
+
+            self._send(f"/connect {self.username}")  # send the username
             data = self._receive()
             if data[:8] == "/success":
                 response = data[9:].strip().split(":")
@@ -64,7 +94,7 @@ class Client:
         if self.s:
             self.s.close()
             self.s = None
-            print(f"Disconnected from {self.host}:{self.port}")
+            print(f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.")
         else:
             print("You are not connected to a server.")
 
