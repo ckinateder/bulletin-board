@@ -25,7 +25,7 @@ class Log:
     def __init__(self):
         self.log = []
 
-    def add(self, id: str, type: str, data: str = None):
+    def add(self, id: str, type: str, data: str = None, echo=True):
         """Add an entry to the log.
 
         Args:
@@ -33,7 +33,10 @@ class Log:
             type (str): type of entry
             data (str, optional): any extra info. Defaults to None.
         """
-        self.log.append({id: {"time": time.time(), "type": type, "data": data}})
+        record = {id: {"time": time.time(), "type": type, "data": data}}
+        self.log.append(record)
+        if echo:
+            print(f"{record}")
 
     def __str__(self):
         s = "ConnectionsLog(log=[\n"
@@ -131,7 +134,7 @@ def send_to_client(client_socket: socket.socket, data: str):
     print(f"Sent '{data}' to {client_socket.getpeername()}")
 
 
-def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby):
+def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby): # one thread per user
     user = None
     while True:
         # receive data from client
@@ -146,18 +149,35 @@ def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby):
             print(f"{addr} >> {data}")
 
         # handle commands
-        if data[:5] == "/user":
-            username = data[6:].strip()
+        if data[:8] == "/newuser":
+            username = data[9:].strip()
             if (
                 username in lobby.users.get_all_usernames() or username == ""
             ):  # unsuccessful
-                send_to_client(client_socket, f"/fail {' '.join(lobby.users)}")
-                break
+
+                send_to_client(client_socket, f"/fail {' '.join(lobby.users.get_all_usernames())}")
             else:  # successful
                 user = User(username, client_socket)
                 lobby.users.add_user(user)
-                send_to_client(client_socket, f"/success {user.id}")
-                lobby.log.add(user.id, "connect")
+                send_to_client(client_socket, f"/success {username}:{user.id}")
+                lobby.log.add(user.id, "connect", user.username)
+        if data[:8] == "/chguser":
+            info = data[9:].strip()
+            username, userid = info.split(":")
+            if user.id != userid: # unsuccessful
+                send_to_client(client_socket, f"/fail {user.username}")
+            elif (
+                username in lobby.users.get_all_usernames() or username == ""
+            ):
+                send_to_client(client_socket, f"/fail {' '.join(lobby.users.get_all_usernames())}")
+            else:
+                user.username = username
+                send_to_client(client_socket, f"/success {username}:{user.id}")
+                lobby.log.add(user.id, "username_change", username)
+
+        elif data[:5] == "/join":
+            board_name = data[6:].strip()
+
 
     # close the connection
     client_socket.close()
@@ -165,7 +185,7 @@ def on_new_client(client_socket: socket.socket, addr: tuple, lobby: Lobby):
     # if the user was logged in, remove them from the users list and log the disconnection
     if user:
         lobby.users.remove_user(user)
-        lobby.log.add(user.id, "disconnect")
+        lobby.log.add(user.id, "disconnect", user.username)
     print(f"Connection from {addr} closed.")
     print(f"users: {lobby.users}")
     print(lobby.log)
@@ -199,8 +219,7 @@ def main(host: str, port: int, lobby: Lobby):
     except KeyboardInterrupt:
         print("Closing server...")
         s.close()
-        sys.exit()
-
+    print(lobby.log)
 
 if __name__ == "__main__":
     # set the args
@@ -219,9 +238,9 @@ if __name__ == "__main__":
     with open(".env", "w+", encoding="utf-8") as f:
         f.write(f"{args.host}:{args.port}\n")
 
-    # create the lobby and add a general board
+    # create the lobby and add a default board
     boards = Lobby()
-    boards.new_board("general")
+    boards.new_board("default")
 
     # run the server
     print(f"Welcome to the Bulletin Board Server! Listening on {args.host}:{args.port}...")
