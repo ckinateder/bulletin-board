@@ -35,14 +35,14 @@ inspired by Minecraft's protocol.
 | `/connect <host>:<port>` | connect to host:port | `/connect localhost:8080` |
 | `/disconnect` | disconnect from the server | `/disconnect` |
 | `/setuser <username>` | set the username | `/setuser calvin` |
-
-**TODO**: add these commands
-| Command | Description | Example | 
-| --- | --- | --- |
 | `/join <group>` | join a group | `/join group1` |
 | `/leave <group>` | leave a group | `/leave group1` |
-| `/groups` | list all groups | `/groups` |
 | `/users` | list all users in the current group | `/users` |
+
+**TODO**: add these commands and more
+| Command | Description | Example | 
+| --- | --- | --- |
+| `/groups` | list all groups | `/groups` |
 
 ## Server Design
 

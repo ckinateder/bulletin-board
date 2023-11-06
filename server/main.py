@@ -143,6 +143,7 @@ class Lobby:
     def add_user_to_board(self, user: User, board_name: str):
         self.get_board_by_name(board_name).users.add_user(user)
         self.log.add(user.id, "board_join", board_name)
+        # now notify all users on the board that a new user has joined
 
     def remove_user_from_board(self, user: User, board_name: str):
         self.get_board_by_name(board_name).users.remove_user(user)
