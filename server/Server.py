@@ -118,6 +118,7 @@ class Server:
 
     def handle_change_username_request(self, message_receive):
         user = self.lobby.users.get_user_by_id(message_receive.body["id"])
+        new_username = message_receive.body["new_username"]
         if not user:  # User doesn't exist. Invalid request
             message_body_send = {
                 "error_code": ServerErrorCode.UserDoesntExist,
@@ -134,11 +135,12 @@ class Server:
             return message_send
 
         if self.lobby.does_username_already_exsist(
-            message_receive.username
+            new_username
         ):  # Username is already taken
             message_body_send = {
                 "error_code": ServerErrorCode.NameTaken,
                 "message": ":".join(self.lobby.users.get_all_usernames()),
+                "new_username": new_username
             }
             message_send = MessageSend(
                 user.username,
@@ -151,9 +153,8 @@ class Server:
             return message_send
 
         # user's username changed. The username doesn't already exist and the user's username changes
-        user.username = message_receive.sender_username
-        user.connected = True
-        message_body_send = {"username": user.username, "id": user.id}
+        user.username = new_username
+        message_body_send = {"id": user.id, "new_username": new_username}
         self.lobby.log.add(user.id, "username_change", user.username)
         message_send = MessageSend(
             user.username,
@@ -246,7 +247,7 @@ class Server:
             return message_send
 
         # TODO: add checking to make sure the user is in that board. And that the board exisists
-        users_in_board = self.lobby.get_board_by_name(board_name).get_users()
+        users_in_board = self.lobby.get_board_by_name(board_name).get_users().get_all_usernames()
         message_body_send = {"users": users_in_board}
         message_send = MessageSend(
             message_receive.username,

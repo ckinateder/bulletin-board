@@ -9,7 +9,7 @@ from MessageReceive import MessageReceive
 import threading
 import ast
 import sys
-import readline
+#import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
@@ -109,7 +109,7 @@ class Client:
             self.s = None
             return (
                 False,
-                "Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.",
+                f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.",
             )
 
         return (False, "You are not connected to a server.")
@@ -186,21 +186,17 @@ class Client:
 
     def post_leave_board(self, data):
         """Leaves the current board."""
-        if data[:8] == "/success":
-            print(f"Left board '{self.current_board}'")
+        if data.is_success:
+            print(f'Left board {data.body["board_name"]}')
             self.current_board = None
-        elif data[:5] == "/fail":
-            print(f"Failed to leave board '{self.current_board}'.")
         else:
-            print("fail. Unknown error.")
-            self.s.close()
-            self.s = None
+            print(f"Failed to leave board '{self.current_board}'.")
 
     def pre_change_username(self, new_username):
         if not self.s:  # if not connected to a server it doesn't need update
             self.username = new_username
             return (False, "")
-        (True, "")
+        return (True, "")
 
     def post_change_username(self, data):
         """Changes the username.
@@ -208,15 +204,11 @@ class Client:
         Args:
             new_username (str): The new username.
         """
-        if data[:8] == "/success":
-            print(f"Username changed to '{new_username}'")
-            self.username = new_username
-        elif data[:5] == "/fail":
-            print(f"Failed to change username to '{new_username}'.")
+        if data.is_success:
+            print(f'Username changed to {data.body["new_username"]}')
+            self.username = data.body["new_username"]
         else:
-            print("fail. Unknown error.")
-            self.s.close()
-            self.s = None
+            print(f'Failed to change username to {data.body["new_username"]}.')
 
     def pre_get_users_in_board(self):
         if self.s and self.current_board:
@@ -225,7 +217,7 @@ class Client:
 
     def post_get_users_in_board(self, data: MessageReceive):
         if data.is_success:
-            users = ast.literal_eval(data.body["users"])
+            users = data.body["users"]
             print(f"Users in board '{self.current_board}': {', '.join(users)}")
             return
         else:
@@ -265,10 +257,10 @@ class Client:
 
             elif prompt_response[:8] == "/setuser":
                 given_username = prompt_response[9:].strip()
-                if self.validate_username(given_username):
+                if not self.validate_username(given_username):
                     print("Come on, man! You knew the rules.")
                     continue
-                message_body = {"new_username": given_username, "id": self.id}
+                message_body = {"id": self.id, "new_username": given_username}
                 message.create_message(
                     self.username, ClientCommand.SetUser, "", message_body
                 )
@@ -304,13 +296,13 @@ class Client:
 
             elif prompt_response[:6] == "/leave":
                 message_will_be_sent, request_message = self.pre_leave_board()
-                message_body = {"id": self.id}
+                message_body = {"id": self.id, "board_name": self.current_board}
                 message.create_message(
                     self.username, ClientCommand.Leave, "", message_body
                 )
 
             elif prompt_response[:6] == "/users":
-                message_body = {"id": self.id, "current_board": self.current_board}
+                message_body = {"id": self.id, "board_name": self.current_board}
                 message.create_message(
                     self.username, ClientCommand.Users, "", message_body
                 )
@@ -359,6 +351,8 @@ class Client:
                                 self.post_join(received_message)
                             case ServerCommand.Users:
                                 self.post_get_users_in_board(received_message)
+                            case ServerCommand.Leave:
+                                self.post_leave_board(received_message)
 
                     elif received_message.run_without_id_check:
                         match sent_message.command:

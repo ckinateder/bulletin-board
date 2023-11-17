@@ -8,6 +8,8 @@ class ServerCommand(Enum):
     Join = 4
     PostMade = 5
     Users = 6
+    Leave = 7
+    Invalid = 99
 
 
 def client_command_from_value(value):

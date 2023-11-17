@@ -1,6 +1,5 @@
 import time
 
-
 class BoardPost:
     def __init__(self):
         self.user

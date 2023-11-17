@@ -28,8 +28,6 @@ def main(host: str, port: int, server: Server):
             print(f"New connection from: {addr}")
             c.sendall("".encode())
             ClientConnection(server, c, addr).start_listening()
-        c.close()
-        thread.join()
     except KeyboardInterrupt:
         print("Closing server...")
         s.close()
