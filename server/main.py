@@ -5,8 +5,8 @@ from Server import Server
 from Lobby import Lobby
 from ClientConnection import ClientConnection
 
-HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
-PORT = 64538  # Port to listen on (non-privileged ports are > 1023)
+DEFAULT_HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
+DEFAULT_PORT = 64538  # Port to listen on (non-privileged ports are > 1023)
 
 def main(host: str, port: int, server: Server):
     """Runs the server.
@@ -37,20 +37,20 @@ def main(host: str, port: int, server: Server):
 
 if __name__ == "__main__":
     # set the args
-    # parser = argparse.ArgumentParser(
-    #     prog="Bulletin Board Server",
-    #     description="Runs a server for a bulletin board.",
-    #     epilog="See the README for more information.",
-    # )
-    # parser.add_argument("-H", "--host", type=str, required=True)
-    # parser.add_argument("-P", "--port", type=int, required=True)
+    parser = argparse.ArgumentParser(
+        prog="Bulletin Board Server",
+        description="Runs a server for a bulletin board.",
+        epilog="See the README for more information.",
+    )
+    parser.add_argument("-H", "--host", type=str, default=DEFAULT_HOST)
+    parser.add_argument("-P", "--port", type=int, default=DEFAULT_PORT)
 
     # parse the arguments
-    # args = parser.parse_args()
+    args = parser.parse_args()
 
     # add into environment variables
     with open(".env", "w+", encoding="utf-8") as f:
-         f.write(f"{HOST}:{PORT}\n")
+        f.write(f"{args.host}:{args.port}\n")
 
     # create the lobby and add a default board
     boards = Lobby()
@@ -58,6 +58,6 @@ if __name__ == "__main__":
     server = Server(boards)
     # run the server
     print(
-        f"Welcome to the Bulletin Board Server! Listening on {HOST}:{PORT}..."
+        f"Welcome to the Bulletin Board Server! Listening on {args.host}:{args.port}..."
     )
-    main(HOST, PORT, server)
+    main(args.host, args.port, server)

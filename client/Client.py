@@ -8,6 +8,8 @@ from MessageSend import MessageSend
 from MessageReceive import MessageReceive
 import threading
 import ast
+import sys
+import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
@@ -225,8 +227,10 @@ class Client:
     def post_user_posted_to_board(self, data):
         pass
 
-    def handle_request_send(self):
-        while prompt_response := input(f"{self.username}> ").strip():
+    def handle_commands(self):
+        prompt_response = ""
+        while prompt_response != "/exit":
+            prompt_response = input(f"{self.username}> ").strip()
             message = MessageSend()
             message_will_be_sent = False
             request_message = ""
@@ -285,10 +289,11 @@ class Client:
                 message_will_be_sent, request_message = self.pre_get_users_in_board()
 
             elif prompt_response[:5] == "/exit":
-                print("bye!")
+                request_message = "bye!"
                 self.disconnect()
-                break
-            
+                break # this doesn't work
+            elif prompt_response == "":
+                continue
             else:
                 message_will_be_sent = False
                 request_message = "Invalid Command"
@@ -358,14 +363,13 @@ class Client:
     def start(self):
         self.get_username()
 
-        send_message_thread = threading.Thread(target=self.handle_request_send)
         router_thread = threading.Thread(target=self.router)
         receive_message_thread = threading.Thread(target=self.handle_inbound_responses)
 
-        send_message_thread.start()
         router_thread.start()
         receive_message_thread.start()
 
-        send_message_thread.join()
+        self.handle_commands()
+        print("No longer handling commands. Closing client...")
         router_thread.join()
         receive_message_thread.join()
