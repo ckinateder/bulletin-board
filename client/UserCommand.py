@@ -12,18 +12,18 @@ class UserCommand(Enum):
     Exit = ("exit", "exit the program")
     Help = ("help", "show this help message")
 
-    def get_commands():
-        return [command.value[0] for command in UserCommand]
+    def get_commands(escape_char:str="/"):
+        return [escape_char+command.value[0] for command in UserCommand]
 
 
-def compare_commands(command:UserCommand, user_command:str):
-    if user_command.startswith("/"+command.value[0]):
+def compare_commands(command:UserCommand, user_command:str, escape_char:str="/"):
+    if user_command.startswith(escape_char+command.value[0]):
         return True
     else:
         return False
 
 def user_command_from_value(value):
-    for key, member in UserCommand.__members__.items():
+    for _, member in UserCommand.__members__.items():
         if member.value == value:
             return "/" + member
     raise ValueError(f"No enum key found for value {value}")

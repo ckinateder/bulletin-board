@@ -10,11 +10,9 @@ from MessageReceive import MessageReceive
 import threading
 import ast
 import sys
-import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
-
 
 class Client:
     def __init__(self):
