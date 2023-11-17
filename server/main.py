@@ -8,6 +8,7 @@ from ClientConnection import ClientConnection
 DEFAULT_HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 DEFAULT_PORT = 64538  # Port to listen on (non-privileged ports are > 1023)
 
+
 def main(host: str, port: int, server: Server):
     """Runs the server.
 

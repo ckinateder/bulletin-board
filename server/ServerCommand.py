@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ServerCommand(Enum):
     Connect = 1
     Reconnect = 2
@@ -8,7 +9,7 @@ class ServerCommand(Enum):
     PostMade = 5
     Users = 6
     Invalid = 99
-    
+
 
 def client_command_from_value(value):
     for key, member in ServerCommand.__members__.items():

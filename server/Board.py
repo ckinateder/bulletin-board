@@ -1,5 +1,7 @@
 from UserContainer import UserContainer
 from BoardPost import BoardPost
+
+
 class Board:
     """Bulletin board object. Contains messages and users."""
 
