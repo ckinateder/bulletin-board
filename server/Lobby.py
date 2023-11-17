@@ -32,3 +32,6 @@ class Lobby:
             if board.name == name:
                 return board
         return None
+    
+    def does_username_already_exsist(self, username):
+        return username in self.users.get_all_usernames()

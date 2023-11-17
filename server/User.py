@@ -4,9 +4,8 @@ import time
 class User:
     """User object. Contains username, socket, and id."""
 
-    def __init__(self, username: str, sock: socket.socket):
+    def __init__(self, username: str):
         self.username = username
-        self.socket = sock
         self.id = hex(hash(str(time.time()) + username))
         self.connected = False
 

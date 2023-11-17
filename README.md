@@ -65,12 +65,29 @@ Client
 
 ```json
 {
-    "command": "/connect",
     "id": "0x1234567",
+    "command": 1,
     "acknowledgementId": null,
     "body": {
         "host": "123.0.0.1",
         "port": 12345
+    }
+}
+```
+
+Server
+
+```json
+{
+    "id": "id",
+    "command": 5,
+    "run_without_id_check": true,
+    "is_success": true,
+    "acknowledgement_id": "acknowledgement_id",
+    "body": {
+        "username": "joe",
+        "post": "hi",
+        "board": "main"
     }
 }
 ```

@@ -1,5 +1,6 @@
+import json
 import socket
-from queue import Queue
+from collections import deque
 import copy
 from ClientCommand import ClientCommand
 from ServerCommand import ServerCommand
@@ -9,18 +10,20 @@ import threading
 import ast
 
 condition = threading.Condition()
+lock = threading.Lock()
 
 class Client:
     def __init__(self):
         self.host = None
         self.port = None
         self.s = None
+        self.connected = False
         self.username = ""
         self.id = None
         self.current_board = None
-        self.get_username()
-        self.sentMessages = Queue(MessageSend)
-        self.receviedMessages = Queue(MessageReceive)
+        self.sentMessages = deque()
+        self.receviedMessages = deque()
+        self.start()
 
     def validate_username(self, username: str) -> bool:
         """Validates the username."""
@@ -43,17 +46,19 @@ class Client:
     def pre_connect(self):
         if self.s:
             return (False, "You are already connected to a server. Please disconnect first.")
-
+        
+        request_message = f"Connecting to {self.host}: {self.port}..."
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((self.host, self.port))
-        request_message = f"Connecting to {self.host}: {self.port}..."
+        self.connected = True
+
         return (True, request_message)
 
     def post_connect(self, data):
         """Connects to the server."""
         if  data.is_success:
-            response = data[9:].strip().split(":")
-            assert response[0] == self.username and response[1] == self.id
+            self.username = data.body["username"]
+            self.id = data.body["id"]
             print(
                 f"success! Your username is '{self.username}'. Your id is '{self.id}'"
             )
@@ -223,17 +228,19 @@ class Client:
     def handle_request_send(self):
         while prompt_response := input(f"{self.username}> ").strip():
             message = MessageSend()
-            message_will_be_sent = True
+            message_will_be_sent = False
             request_message = ""
             
             if prompt_response == "/help":
+                message_will_be_sent = False
                 self.help()
 
             elif prompt_response[:8] == "/connect":
-                message_will_be_sent, request_message = self.pre_connect() 
                 resp = self.parse_connect(prompt_response)
+                
                 if resp:
                     self.host, self.port = resp
+                    message_will_be_sent, request_message = self.pre_connect() 
                     if not self.id:
                         message_body = {"host": self.host, "port": self.port}
                         message.create_message(self.username, ClientCommand.Connect, "", message_body)
@@ -254,7 +261,7 @@ class Client:
                 message_will_be_sent, request_message = self.disconnect() # Message will never be sent for a disconnet command, so there is no need to construct one.
 
             elif prompt_response[:5] == "/send":
-                message_body = {"message": prompt_response[6:]}
+                message_body = {"id": self.id, "message": prompt_response[6:]}
                 message.create_message(self.username, ClientCommand.Send, "", message_body)
                 message_will_be_sent = True
 
@@ -264,7 +271,7 @@ class Client:
                 else:
                     board_name = prompt_response[6:].strip()
                 message_will_be_sent, request_message = self.pre_join() 
-                message_body = {"board_name": board_name}
+                message_body = {"id": self.id, "board_name": board_name}
                 message.create_message(self.username, ClientCommand.Join, "", message_body)       
 
             elif prompt_response[:6] == "/leave":
@@ -273,7 +280,7 @@ class Client:
                 message.create_message(self.username, ClientCommand.Leave, "", message_body)
 
             elif prompt_response[:6] == "/users":
-                message_body = {"current_board": self.current_board}
+                message_body = {"id": self.id, "current_board": self.current_board}
                 message.create_message(self.username, ClientCommand.Users, "", message_body)
                 message_will_be_sent, request_message = self.pre_get_users_in_board()
 
@@ -288,48 +295,47 @@ class Client:
 
             if message_will_be_sent:
                 outbound_message = message.get_message()
-                self.sentMessages.put(outbound_message)
+                with lock:
+                    self.sentMessages.append(message)
                 self._send(outbound_message)
             
             print(request_message)
 
     def handle_inbound_responses(self):
         while True:
-            data = MessageReceive()
-            data.parse_message(self._receive(echo=False))
-            self.receviedMessages.push(data)
+            if self.s and self.connected == True:
+                data = MessageReceive(self._receive(echo=False))
+                with lock:
+                    self.receviedMessages.append(data)
 
     def router(self): # Routes received responses to the correct post_ method
         while True:
-            with condition:
-                while self.sentMessages == [] and self.receviedMessages == []:
-                     condition.wait()
+            if self.sentMessages != deque() and self.receviedMessages != deque():
+                with lock:
+                    sent_message = self.sentMessages.popleft()
+                    received_message = self.receviedMessages.popleft()
+                    if sent_message.id == received_message.acknowledgement_id:
+                        match received_message.command:
+                            case ServerCommand.Connect:
+                                self.post_connect(received_message)
+                            case ServerCommand.Reconnect:
+                                self.post_reconnect(received_message)
+                            case ServerCommand.SetUser:
+                                self.post_change_username(received_message)
+                            case ServerCommand.Join:
+                                self.post_join(received_message)
+                            case ServerCommand.Users:
+                                self.post_get_users_in_board(received_message)
 
-                original_sent_messages = copy.deepcopy(self.sentMessages)
-                sent_message = self.sentMessages.get()
-                received_message = self.receviedMessages.get()
-                if sent_message.id == received_message.acknowledgement_id:
-                    match sent_message.command:
-                        case ServerCommand.Connect:
-                            self.post_connect(received_message)
-                        case ServerCommand.Reconnect:
-                            self.post_reconnect(received_message)
-                        case ServerCommand.SetUser:
-                            self.post_change_username(received_message)
-                        case ServerCommand.Join:
-                            self.post_join(received_message)
-                        case ServerCommand.Users:
-                            self.post_get_users_in_board(received_message)
-
-                elif received_message.run_without_id_check:
-                    match sent_message.command:
-                        case ServerCommand.PostMade:
-                            self.post_user_posted_to_board(received_message)
-                    self.sentMessages.queue = original_sent_messages
-                
-                else: # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
-                    self.sentMessages.queue = original_sent_messages
-                    self.receviedMessages.put(received_message)
+                    elif received_message.run_without_id_check:
+                        match sent_message.command:
+                            case ServerCommand.PostMade:
+                                self.post_user_posted_to_board(received_message)
+                        self.sentMessages.appendleft(sent_message)
+                    
+                    else: # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
+                        self.sentMessages.appendleft(sent_message)
+                        self.receviedMessages.append(received_message)
 
     def _receive(self, buffer_size=1024, echo=True):
         data = self.s.recv(buffer_size).decode("utf-8").strip()
@@ -348,3 +354,18 @@ class Client:
                 print(f"sent '{data}' to {self.s.getpeername()}")
         else:
             print("You are not connected to a server.")
+
+    def start(self):
+        self.get_username()
+
+        send_message_thread = threading.Thread(target=self.handle_request_send)
+        router_thread = threading.Thread(target=self.router)
+        receive_message_thread = threading.Thread(target=self.handle_inbound_responses)
+
+        send_message_thread.start()
+        router_thread.start()
+        receive_message_thread.start()
+
+        send_message_thread.join()
+        router_thread.join()
+        receive_message_thread.join()
