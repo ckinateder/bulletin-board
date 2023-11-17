@@ -3,13 +3,14 @@ import socket
 from collections import deque
 import copy
 from ClientCommand import ClientCommand
+from UserCommand import UserCommand, compare_commands
 from ServerCommand import ServerCommand
 from MessageSend import MessageSend
 from MessageReceive import MessageReceive
 import threading
 import ast
 import sys
-#import readline
+import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
@@ -117,14 +118,8 @@ class Client:
     def help(self):
         """Prints a list of commands."""
         print("Commands:")
-        print("/connect <host>:<port> - connect to a server")
-        print("/disconnect - disconnect from the server")
-        print("/send <message> - send a message to the server")  # remove later
-        print("/setuser <username> - set your username")
-        print("/join <board_name> - join a board")
-        print("/leave - leave the current board")
-
-        print("/exit - exit the program")
+        [print("/"+" ".join(command.value)) for command in UserCommand]
+    
 
     def parse_connect(self, prompt_response):
         """Parses the connect command.
@@ -234,11 +229,11 @@ class Client:
             message_will_be_sent = False
             request_message = ""
 
-            if prompt_response == "/help":
+            if compare_commands(UserCommand.Help, prompt_response):
                 message_will_be_sent = False
                 self.help()
 
-            elif prompt_response[:8] == "/connect":
+            elif compare_commands(UserCommand.Connect, prompt_response):
                 resp = self.parse_connect(prompt_response)
 
                 if resp:
@@ -255,7 +250,7 @@ class Client:
                             self.username, ClientCommand.Reconnect, "", message.body
                         )
 
-            elif prompt_response[:8] == "/setuser":
+            elif compare_commands(UserCommand.Setuser, prompt_response):
                 given_username = prompt_response[9:].strip()
                 if not self.validate_username(given_username):
                     print("Come on, man! You knew the rules.")
@@ -268,7 +263,7 @@ class Client:
                     given_username
                 )
 
-            elif prompt_response[:11] == "/disconnect":
+            elif compare_commands(UserCommand.Disconnect, prompt_response):
                 (
                     message_will_be_sent,
                     request_message,
@@ -276,14 +271,14 @@ class Client:
                     self.disconnect()
                 )  # Message will never be sent for a disconnet command, so there is no need to construct one.
 
-            elif prompt_response[:5] == "/send":
+            elif compare_commands(UserCommand.Send, prompt_response):
                 message_body = {"id": self.id, "message": prompt_response[6:]}
                 message.create_message(
                     self.username, ClientCommand.Send, "", message_body
                 )
                 message_will_be_sent = True
 
-            elif prompt_response[:5] == "/join":
+            elif compare_commands(UserCommand.Join, prompt_response):
                 if len(prompt_response) < 7:
                     board_name = "default"  # just for part 1
                 else:
@@ -294,21 +289,21 @@ class Client:
                     self.username, ClientCommand.Join, "", message_body
                 )
 
-            elif prompt_response[:6] == "/leave":
+            elif compare_commands(UserCommand.Leave, prompt_response):
                 message_will_be_sent, request_message = self.pre_leave_board()
                 message_body = {"id": self.id, "board_name": self.current_board}
                 message.create_message(
                     self.username, ClientCommand.Leave, "", message_body
                 )
 
-            elif prompt_response[:6] == "/users":
+            elif compare_commands(UserCommand.Users, prompt_response):
                 message_body = {"id": self.id, "board_name": self.current_board}
                 message.create_message(
                     self.username, ClientCommand.Users, "", message_body
                 )
                 message_will_be_sent, request_message = self.pre_get_users_in_board()
 
-            elif prompt_response[:5] == "/exit":
+            elif compare_commands(UserCommand.Exit, prompt_response):
                 request_message = "bye!"
                 self.disconnect()
                 break  # this doesn't work
