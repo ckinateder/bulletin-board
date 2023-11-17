@@ -1,5 +1,6 @@
 import time
 
+
 class Log:
     """Hold a log of what happens"""
 

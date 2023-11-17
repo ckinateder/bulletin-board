@@ -3,6 +3,7 @@ from Log import Log
 from User import User
 from Board import Board
 
+
 class Lobby:
     """Contains all bulletin boards."""
 
@@ -32,6 +33,6 @@ class Lobby:
             if board.name == name:
                 return board
         return None
-    
+
     def does_username_already_exsist(self, username):
         return username in self.users.get_all_usernames()

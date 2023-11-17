@@ -8,9 +8,12 @@ from MessageSend import MessageSend
 from MessageReceive import MessageReceive
 import threading
 import ast
+import sys
+import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
+
 
 class Client:
     def __init__(self):
@@ -45,8 +48,11 @@ class Client:
 
     def pre_connect(self):
         if self.s:
-            return (False, "You are already connected to a server. Please disconnect first.")
-        
+            return (
+                False,
+                "You are already connected to a server. Please disconnect first.",
+            )
+
         request_message = f"Connecting to {self.host}: {self.port}..."
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((self.host, self.port))
@@ -56,20 +62,20 @@ class Client:
 
     def post_connect(self, data):
         """Connects to the server."""
-        if  data.is_success:
+        if data.is_success:
             self.username = data.body["username"]
             self.id = data.body["id"]
             print(
                 f"success! Your username is '{self.username}'. Your id is '{self.id}'"
             )
             return
-        elif (not data.is_success) and data.body['fail_reason'] == "name_taken":
+        elif (not data.is_success) and data.body["fail_reason"] == "name_taken":
             print(
                 f"fail. Username '{self.username}' already taken. Please choose another and try again."
             )
             self.get_username()
             return
-        elif (not data.is_success) and data.body['fail_reason'] == "no_id":
+        elif (not data.is_success) and data.body["fail_reason"] == "no_id":
             print("fail. Killing corrupted user identity. Try again.")
             self.disconnect()
             self.id = None
@@ -78,8 +84,8 @@ class Client:
             print("fail. Unknown error.")
             self.disconnect()
             return
-        
-    def post_reconnect (self, data: MessageReceive):
+
+    def post_reconnect(self, data: MessageReceive):
         if data.is_success:
             response = data[9:].strip().split(":")
             self.id = response[1]
@@ -88,7 +94,7 @@ class Client:
                 f"success! Your username is '{self.username}'. Your id is '{self.id}'"
             )
             return
-        
+
         print(
             f"fail. Username '{self.username}' already taken. Please choose another and try to connect again."
         )
@@ -101,7 +107,10 @@ class Client:
         if self.s:
             self.s.close()
             self.s = None
-            return (False, "Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.")
+            return (
+                False,
+                "Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.",
+            )
 
         return (False, "You are not connected to a server.")
 
@@ -143,7 +152,7 @@ class Client:
         except ValueError:
             print("Invalid host or port.")
             return None
-        
+
     def pre_join(self):
         if not self.s:
             return (False, "You are not connected to a server.")
@@ -156,7 +165,7 @@ class Client:
         Args:
             board_name (str): The name of the board to join.
         """
-        board_name = data.body['board_name']
+        board_name = data.body["board_name"]
         if self.s:
             if data.is_success:
                 print(f"Joined board '{board_name}'")
@@ -216,7 +225,7 @@ class Client:
 
     def post_get_users_in_board(self, data: MessageReceive):
         if data.is_success:
-            users = ast.literal_eval(data.body['users'])  
+            users = ast.literal_eval(data.body["users"])
             print(f"Users in board '{self.current_board}': {', '.join(users)}")
             return
         else:
@@ -225,28 +234,34 @@ class Client:
     def post_user_posted_to_board(self, data):
         pass
 
-    def handle_request_send(self):
-        while prompt_response := input(f"{self.username}> ").strip():
+    def handle_commands(self):
+        prompt_response = ""
+        while prompt_response != "/exit":
+            prompt_response = input(f"{self.username}> ").strip()
             message = MessageSend()
             message_will_be_sent = False
             request_message = ""
-            
+
             if prompt_response == "/help":
                 message_will_be_sent = False
                 self.help()
 
             elif prompt_response[:8] == "/connect":
                 resp = self.parse_connect(prompt_response)
-                
+
                 if resp:
                     self.host, self.port = resp
-                    message_will_be_sent, request_message = self.pre_connect() 
+                    message_will_be_sent, request_message = self.pre_connect()
                     if not self.id:
                         message_body = {"host": self.host, "port": self.port}
-                        message.create_message(self.username, ClientCommand.Connect, "", message_body)
+                        message.create_message(
+                            self.username, ClientCommand.Connect, "", message_body
+                        )
                     else:
                         message_body = {"id": self.id}
-                        message.create_message(self.username, ClientCommand.Reconnect, "", message.body)
+                        message.create_message(
+                            self.username, ClientCommand.Reconnect, "", message.body
+                        )
 
             elif prompt_response[:8] == "/setuser":
                 given_username = prompt_response[9:].strip()
@@ -254,15 +269,26 @@ class Client:
                     print("Come on, man! You knew the rules.")
                     continue
                 message_body = {"new_username": given_username, "id": self.id}
-                message.create_message(self.username, ClientCommand.SetUser, "", message_body)
-                message_will_be_sent, request_message = self.pre_change_username(given_username)
+                message.create_message(
+                    self.username, ClientCommand.SetUser, "", message_body
+                )
+                message_will_be_sent, request_message = self.pre_change_username(
+                    given_username
+                )
 
             elif prompt_response[:11] == "/disconnect":
-                message_will_be_sent, request_message = self.disconnect() # Message will never be sent for a disconnet command, so there is no need to construct one.
+                (
+                    message_will_be_sent,
+                    request_message,
+                ) = (
+                    self.disconnect()
+                )  # Message will never be sent for a disconnet command, so there is no need to construct one.
 
             elif prompt_response[:5] == "/send":
                 message_body = {"id": self.id, "message": prompt_response[6:]}
-                message.create_message(self.username, ClientCommand.Send, "", message_body)
+                message.create_message(
+                    self.username, ClientCommand.Send, "", message_body
+                )
                 message_will_be_sent = True
 
             elif prompt_response[:5] == "/join":
@@ -270,25 +296,32 @@ class Client:
                     board_name = "default"  # just for part 1
                 else:
                     board_name = prompt_response[6:].strip()
-                message_will_be_sent, request_message = self.pre_join() 
+                message_will_be_sent, request_message = self.pre_join()
                 message_body = {"id": self.id, "board_name": board_name}
-                message.create_message(self.username, ClientCommand.Join, "", message_body)       
+                message.create_message(
+                    self.username, ClientCommand.Join, "", message_body
+                )
 
             elif prompt_response[:6] == "/leave":
                 message_will_be_sent, request_message = self.pre_leave_board()
                 message_body = {"id": self.id}
-                message.create_message(self.username, ClientCommand.Leave, "", message_body)
+                message.create_message(
+                    self.username, ClientCommand.Leave, "", message_body
+                )
 
             elif prompt_response[:6] == "/users":
                 message_body = {"id": self.id, "current_board": self.current_board}
-                message.create_message(self.username, ClientCommand.Users, "", message_body)
+                message.create_message(
+                    self.username, ClientCommand.Users, "", message_body
+                )
                 message_will_be_sent, request_message = self.pre_get_users_in_board()
 
             elif prompt_response[:5] == "/exit":
-                print("bye!")
+                request_message = "bye!"
                 self.disconnect()
-                break
-            
+                break  # this doesn't work
+            elif prompt_response == "":
+                continue
             else:
                 message_will_be_sent = False
                 request_message = "Invalid Command"
@@ -298,7 +331,7 @@ class Client:
                 with lock:
                     self.sentMessages.append(message)
                 self._send(outbound_message)
-            
+
             print(request_message)
 
     def handle_inbound_responses(self):
@@ -308,7 +341,7 @@ class Client:
                 with lock:
                     self.receviedMessages.append(data)
 
-    def router(self): # Routes received responses to the correct post_ method
+    def router(self):  # Routes received responses to the correct post_ method
         while True:
             if self.sentMessages != deque() and self.receviedMessages != deque():
                 with lock:
@@ -332,8 +365,8 @@ class Client:
                             case ServerCommand.PostMade:
                                 self.post_user_posted_to_board(received_message)
                         self.sentMessages.appendleft(sent_message)
-                    
-                    else: # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
+
+                    else:  # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
                         self.sentMessages.appendleft(sent_message)
                         self.receviedMessages.append(received_message)
 
@@ -358,14 +391,13 @@ class Client:
     def start(self):
         self.get_username()
 
-        send_message_thread = threading.Thread(target=self.handle_request_send)
         router_thread = threading.Thread(target=self.router)
         receive_message_thread = threading.Thread(target=self.handle_inbound_responses)
 
-        send_message_thread.start()
         router_thread.start()
         receive_message_thread.start()
 
-        send_message_thread.join()
+        self.handle_commands()
+        print("No longer handling commands. Closing client...")
         router_thread.join()
         receive_message_thread.join()

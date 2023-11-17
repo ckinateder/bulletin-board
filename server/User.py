@@ -1,6 +1,7 @@
 import socket
 import time
 
+
 class User:
     """User object. Contains username, socket, and id."""
 
