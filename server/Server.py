@@ -64,7 +64,7 @@ class Server:
             return message_send
 
         match (
-            user.username == message_receive.sender_username,
+            user.username == message_receive.username,
             self.lobby.does_username_already_exsist(message_receive.username),
         ):
             case (

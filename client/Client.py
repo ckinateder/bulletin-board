@@ -9,7 +9,7 @@ from MessageReceive import MessageReceive
 import threading
 import ast
 import sys
-#import readline
+import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
@@ -87,9 +87,8 @@ class Client:
 
     def post_reconnect(self, data: MessageReceive):
         if data.is_success:
-            response = data[9:].strip().split(":")
-            self.id = response[1]
-            assert response[0] == self.username  # make sure the username is correct
+            self.id = data.body["id"]
+            self.username = data.username
             print(
                 f"success! Your username is '{self.username}'. Your id is '{self.id}'"
             )
@@ -252,7 +251,7 @@ class Client:
                     else:
                         message_body = {"id": self.id}
                         message.create_message(
-                            self.username, ClientCommand.Reconnect, "", message.body
+                            self.username, ClientCommand.Reconnect, "", message_body
                         )
 
             elif prompt_response[:8] == "/setuser":
