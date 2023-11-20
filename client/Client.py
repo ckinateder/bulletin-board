@@ -10,7 +10,7 @@ from MessageReceive import MessageReceive
 import threading
 import ast
 import sys
-import readline
+#import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
@@ -88,7 +88,7 @@ class Client:
     def post_reconnect(self, data: MessageReceive):
         if data.is_success:
             self.id = data.body["id"]
-            self.username = data.username
+            self.username = data.body["username"]
             print(
                 f"success! Your username is '{self.username}'. Your id is '{self.id}'"
             )
@@ -106,6 +106,7 @@ class Client:
         if self.s:
             self.s.close()
             self.s = None
+            self.connected = False
             return (
                 False,
                 f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.",
@@ -310,21 +311,23 @@ class Client:
             else:
                 message_will_be_sent = False
                 request_message = "Invalid Command"
-
+            
+            print(request_message)
             if message_will_be_sent:
                 outbound_message = message.get_message()
                 with lock:
                     self.sentMessages.append(message)
                 self._send(outbound_message)
 
-            print(request_message)
+            
 
     def handle_inbound_responses(self):
         while True:
             if self.s and self.connected == True:
-                data = MessageReceive(self._receive(echo=False))
+                data = self._receive(echo=False)
                 with lock:
-                    self.receviedMessages.append(data)
+                    if data != "":
+                        self.receviedMessages.append(MessageReceive(data))
 
     def router(self):  # Routes received responses to the correct post_ method
         while True:
@@ -358,16 +361,19 @@ class Client:
                         self.receviedMessages.append(received_message)
 
     def _receive(self, buffer_size=1024, echo=True):
-        data = self.s.recv(buffer_size).decode("utf-8").strip()
-        if echo:
-            print(f"receieved '{data}' from {self.s.getpeername()}")
-        if not data:
-            self.s.close()
-            print(f"Connection from {self.host} closed.")
-            self.s = None
-        return data
+        try:
+            data = self.s.recv(buffer_size).decode("utf-8").strip()
+            if echo:
+                print(f"receieved '{data}' from {self.s.getpeername()}")
+            if not data:
+                self.s.close()
+                print(f"Connection from {self.host} closed.")
+                self.s = None
+            return data
+        except (OSError, ConnectionAbortedError):
+            return ""
 
-    def _send(self, data, echo=True):
+    def _send(self, data, echo=False):
         if self.s:
             self.s.sendall(data.encode())
             if echo:
@@ -383,8 +389,10 @@ class Client:
 
         router_thread.start()
         receive_message_thread.start()
-
-        self.handle_commands()
+        try:
+            self.handle_commands()
+        except KeyboardInterrupt:
+            pass
         print("No longer handling commands. Closing client...")
         router_thread.join()
         receive_message_thread.join()

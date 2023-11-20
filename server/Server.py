@@ -88,7 +88,7 @@ class Server:
                 False,
                 False,
             ):  # user's username changed. The username doesn't already exist and the user's username changes
-                user.username = message_receive.sender_username
+                user.username = message_receive.username
                 user.connected = True
                 message_body_send = {"username": user.username, "id": user.id}
                 self.lobby.log.add(user.id, "reconnect")
