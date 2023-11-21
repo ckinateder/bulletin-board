@@ -18,6 +18,11 @@ class MessageSend:
         self.acknowledgement_id = acknowledgement_id
         self.body = body
 
+    def serialize_error_code(self, body):
+        if "error_code" in body:
+            body["error_code"] = body["error_code"].value
+        return body
+
     def get_message(self):
         return json.dumps(
             {
@@ -26,6 +31,6 @@ class MessageSend:
                 "run_without_id_check": self.run_without_id_check,
                 "is_success": self.is_success,
                 "acknowledgement_id": self.acknowledgement_id,
-                "body": self.body,
+                "body": self.serialize_error_code(self.body),
             }
         )
