@@ -7,10 +7,11 @@ from UserCommand import UserCommand, compare_commands
 from ServerCommand import ServerCommand
 from MessageSend import MessageSend
 from MessageReceive import MessageReceive
+from ServerErrorCode import ServerErrorCode, server_error_code_from_response
 import threading
 import ast
 import sys
-import readline
+#import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
@@ -60,46 +61,42 @@ class Client:
 
         return (True, request_message)
 
-    def post_connect(self, data):
+    def post_connect(self, message_receive):
         """Connects to the server."""
-        if data.is_success:
-            self.username = data.body["username"]
-            self.id = data.body["id"]
-            print(
-                f"success! Your username is '{self.username}'. Your id is '{self.id}'"
-            )
-            return
-        elif (not data.is_success) and data.body["fail_reason"] == "name_taken":
-            print(
-                f"fail. Username '{self.username}' already taken. Please choose another and try again."
-            )
-            self.get_username()
-            return
-        elif (not data.is_success) and data.body["fail_reason"] == "no_id":
-            print("fail. Killing corrupted user identity. Try again.")
-            self.disconnect()
-            self.id = None
-            return
-        else:
-            print("fail. Unknown error.")
-            self.disconnect()
-            return
+        successful_connect = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                self.username = message_receive.body["username"]
+                self.id = message_receive.body["id"]
+                response_output = f"Your username is '{self.username}'. Your id is '{self.id}'"
+            case (False, ServerErrorCode.NameTaken):
+                successful_connect = False
+                response_output = f"Username '{self.username}' already taken. Please change it and try again."
+                self.disconnect()
+            case (_, _):
+                successful_connect = False
+                response_output = "Unknown error"
+                self.disconnect()
+        return (successful_connect, response_output)
 
-    def post_reconnect(self, data: MessageReceive):
-        if data.is_success:
-            self.id = data.body["id"]
-            self.username = data.body["username"]
-            print(
-                f"success! Your username is '{self.username}'. Your id is '{self.id}'"
-            )
-            return
-
-        print(
-            f"fail. Username '{self.username}' already taken. Please choose another and try to connect again."
-        )
-        self.s.close()
-        self.s = None
-        self.get_username()
+    def post_reconnect(self, message_receive):
+        successful_connect = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                self.id = message_receive.body["id"]
+                self.username = message_receive.body["username"]
+                response_output = f"Your username is '{self.username}'. Your id is still '{self.id}'"
+            case (False, ServerErrorCode.NameTaken):
+                successful_connect = False
+                response_output = f"Username '{self.username}' already taken. Please change it and try again."
+                self.disconnect()
+            case (_, _):
+                successful_connect = False
+                response_output = "Unknown error"
+                self.disconnect()
+        return (successful_connect, response_output)
 
     def disconnect(self):
         """Gracefully disconnects from the server."""
@@ -111,14 +108,12 @@ class Client:
                 False,
                 f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.",
             )
-
         return (False, "You are not connected to a server.")
 
     def help(self):
         """Prints a list of commands."""
         print("Commands:")
         [print("/"+" ".join(command.value)) for command in UserCommand]
-    
 
     def parse_connect(self, prompt_response):
         """Parses the connect command.
@@ -153,38 +148,41 @@ class Client:
         else:
             return (True, "")
 
-    def post_join(self, data: MessageReceive):
-        """Joins a board.
-
-        Args:
-            board_name (str): The name of the board to join.
-        """
-        board_name = data.body["board_name"]
-        if self.s:
-            if data.is_success:
-                print(f"Joined board '{board_name}'")
-                self.current_board = board_name
-            elif not data.is_success:
-                print(f"Failed to join board '{board_name}'.")
-            else:
-                print("fail. Unknown error.")
-                self.s.close()
-                self.s = None
-        else:
-            print("You are not connected to a server.")
+    def post_join(self, message_receive: MessageReceive):
+        successful_join = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                self.current_board = message_receive.body['board_name']
+                response_output = f"Joined board: {self.current_board}"
+            case (False, ServerErrorCode.BoardDoesntExist):
+                successful_join = False
+                response_output = "The board you tried to join doesn't exist."
+            case (_, _):
+                successful_join = False
+                response_output = "Unknown error"
+        return (successful_join, response_output)
 
     def pre_leave_board(self):
         if self.s and self.current_board:
             return (True, "")
         return (False, "You are not connected to a server and board.")
 
-    def post_leave_board(self, data):
+    def post_leave_board(self, message_receive):
         """Leaves the current board."""
-        if data.is_success:
-            print(f'Left board {data.body["board_name"]}')
-            self.current_board = None
-        else:
-            print(f"Failed to leave board '{self.current_board}'.")
+        successful_leave = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                response_output = f"Left board{message_receive.body['board_name']}"
+                self.current_board = None
+            case (False, ServerErrorCode.BoardDoesntExist):
+                successful_leave = False
+                response_output = "The board you tried to leave doesn't exist."
+            case (_, _):
+                successful_leave = False
+                response_output = "Unknown error"
+        return (successful_leave, response_output)
 
     def pre_change_username(self, new_username):
         if not self.s:  # if not connected to a server it doesn't need update
@@ -192,30 +190,43 @@ class Client:
             return (False, "")
         return (True, "")
 
-    def post_change_username(self, data):
-        """Changes the username.
-
-        Args:
-            new_username (str): The new username.
-        """
-        if data.is_success:
-            print(f'Username changed to {data.body["new_username"]}')
-            self.username = data.body["new_username"]
-        else:
-            print(f'Failed to change username to {data.body["new_username"]}.')
+    def post_change_username(self, message_receive):
+        successful_change_username = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                self.username = message_receive.body["new_username"]
+                response_output = f'Username changed to: {self.username}'
+            case (False, ServerErrorCode.UserDoesntExist):
+                successful_change_username = False
+                response_output = "Your user doesn't exist on the server"
+            case (False, ServerErrorCode.NameTaken):
+                successful_change_username = False
+                response_output = f'Username {message_receive.body["new_username"]} is already taken'
+            case (_, _):
+                successful_change_username = False
+                response_output = "Unknown error"
+        return (successful_change_username, response_output)
 
     def pre_get_users_in_board(self):
         if self.s and self.current_board:
             return (True, "")
         return (False, "You are not connected to a server and board.")
 
-    def post_get_users_in_board(self, data: MessageReceive):
-        if data.is_success:
-            users = data.body["users"]
-            print(f"Users in board '{self.current_board}': {', '.join(users)}")
-            return
-        else:
-            print(f"Failed to get users in board '{self.current_board}'.")
+    def post_get_users_in_board(self, message_receive: MessageReceive):
+        successful_get_users = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                users = message_receive.body["users"]
+                response_output = f"Users in board '{self.current_board}': {', '.join(users)}"
+            case (False, ServerErrorCode.BoardDoesntExist):
+                successful_get_users = False
+                response_output = "The board you tried to get users from doesn't exist."
+            case (_, _):
+                successful_get_users = False
+                response_output = "Unknown error"
+        return (successful_get_users, response_output)
 
     def post_user_posted_to_board(self, data):
         pass
@@ -319,8 +330,6 @@ class Client:
                     self.sentMessages.append(message)
                 self._send(outbound_message)
 
-            
-
     def handle_inbound_responses(self):
         while True:
             if self.s and self.connected == True:
@@ -335,20 +344,25 @@ class Client:
                 with lock:
                     sent_message = self.sentMessages.popleft()
                     received_message = self.receviedMessages.popleft()
+                    success = None
+                    response_output = ""
                     if sent_message.id == received_message.acknowledgement_id:
                         match received_message.command:
                             case ServerCommand.Connect:
-                                self.post_connect(received_message)
+                                success, response_output = self.post_connect(received_message)
                             case ServerCommand.Reconnect:
-                                self.post_reconnect(received_message)
+                                success, response_output = self.post_reconnect(received_message)
                             case ServerCommand.SetUser:
-                                self.post_change_username(received_message)
+                                success, response_output = self.post_change_username(received_message)
                             case ServerCommand.Join:
-                                self.post_join(received_message)
+                                success, response_output = self.post_join(received_message)
                             case ServerCommand.Users:
-                                self.post_get_users_in_board(received_message)
+                                success, response_output = self.post_get_users_in_board(received_message)
                             case ServerCommand.Leave:
-                                self.post_leave_board(received_message)
+                                success, response_output = self.post_leave_board(received_message)
+                            case ServerCommand.Invalid:
+                                success = False
+                                response_output = "The provided command was invalid."
 
                     elif received_message.run_without_id_check:
                         match sent_message.command:
@@ -359,6 +373,12 @@ class Client:
                     else:  # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
                         self.sentMessages.appendleft(sent_message)
                         self.receviedMessages.append(received_message)
+                    
+                    if success:
+                        print(f"Success! {response_output}")
+                    else:
+                        print(f"Command Failed! {response_output}")
+                    print()
 
     def _receive(self, buffer_size=1024, echo=True):
         try:
