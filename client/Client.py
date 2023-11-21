@@ -154,7 +154,7 @@ class Client:
         match (message_receive.is_success, server_error_code_from_response(message_receive)):
             case (True, None):
                 self.current_board = message_receive.body['board_name']
-                response_output = f"Joined board: {self.current_board}"
+                response_output = f"Joined Board: {self.current_board}"
             case (False, ServerErrorCode.BoardDoesntExist):
                 successful_join = False
                 response_output = "The board you tried to join doesn't exist."
@@ -174,7 +174,7 @@ class Client:
         response_output = ""
         match (message_receive.is_success, server_error_code_from_response(message_receive)):
             case (True, None):
-                response_output = f"Left board{message_receive.body['board_name']}"
+                response_output = f"Left Board: {message_receive.body['board_name']}"
                 self.current_board = None
             case (False, ServerErrorCode.BoardDoesntExist):
                 successful_leave = False

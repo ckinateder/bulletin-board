@@ -27,7 +27,7 @@ def main(host: str, port: int, server: Server):
             # this returns a new socket object and the IP address of the client
             print(f"New connection from: {addr}")
             c.sendall("".encode())
-            ClientConnection(server, c, addr).start_listening()
+            server.new_connection(c, addr)
     except KeyboardInterrupt:
         print("Closing server...")
         s.close()
