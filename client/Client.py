@@ -136,10 +136,9 @@ class Client:
             return None
 
     def pre_join(self):
-        if not self.s:
-            return (False, "You are not connected to a server.")
-        else:
+        if self.connected:
             return (True, "")
+        return (False, "You are not connected to a server.")
 
     def post_join(self, message_receive: MessageReceive):
         successful_join = True
@@ -157,12 +156,12 @@ class Client:
         return (successful_join, response_output)
 
     def does_user_have_socket_and_board(self):
-        match (self.s and self.current_board):
-            case (None, None):
+        match (self.connected, self.current_board):
+            case (False, None):
                 return (False, "You are not connected to a server or board.")
-            case (None, _):
+            case (False, _):
                 return (False, "You are not connected to a server.")
-            case (_, None):
+            case (True, None):
                 return (False, "You are not connected to a board.")
         return (True, "")
 

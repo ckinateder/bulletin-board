@@ -128,17 +128,20 @@ class Server:
         return message_send
 
     def handle_get_users_request(self, message_receive):
-        user = self.lobby.users.get_user_by_id(message_receive.body["id"])
-        board_name = message_receive.body["board_name"]
-        if not user:
-            message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
-            message_send = MessageSend(message_receive.username, ServerCommand.Users, False, False, message_receive.id, message_body_send)
+            user = self.lobby.users.get_user_by_id(message_receive.body["id"])
+            board = self.lobby.get_board_by_name(message_receive.body["board_name"])
+            match (user, board):
+                case (None, _):
+                    message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Users, False, False, message_receive.id, message_body_send)
+                case (_, None):
+                    message_body_send = {"error_code": ServerErrorCode.BoardDoesntExist}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Users, False, False, message_receive.id, message_body_send)
+                case (_, _):
+                    users_in_board = board.get_users().get_all_usernames()
+                    message_body_send = {"users": users_in_board}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Users, False, True, message_receive.id, message_body_send)
             return message_send
-
-        users_in_board = self.lobby.get_board_by_name(board_name).get_users().get_all_usernames()
-        message_body_send = {"users": users_in_board}
-        message_send = MessageSend(message_receive.username, ServerCommand.Users, False, True, message_receive.id, message_body_send)
-        return message_send
     
     def handle_post_request(self, message_receive):
         user = self.lobby.users.get_user_by_id(message_receive.body["id"])
