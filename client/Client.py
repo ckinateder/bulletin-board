@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import socket
 from collections import deque
@@ -11,6 +12,7 @@ from ServerErrorCode import ServerErrorCode, server_error_code_from_response
 import threading
 import ast
 import sys
+import time
 #import readline
 
 condition = threading.Condition()
@@ -111,19 +113,10 @@ class Client:
         return (False, "You are not connected to a server.")
 
     def help(self):
-        """Prints a list of commands."""
         print("Commands:")
         [print("/"+" ".join(command.value)) for command in UserCommand]
 
     def parse_connect(self, prompt_response):
-        """Parses the connect command.
-
-        Args:
-            prompt_response (str): The user's response to the prompt.
-
-        Returns:
-            tuple: A tuple containing the host and port.
-        """
         try:
             if len(prompt_response) < 10:
                 with open(".env", "r", encoding="utf-8") as f:
@@ -163,10 +156,15 @@ class Client:
                 response_output = "Unknown error"
         return (successful_join, response_output)
 
-    def pre_leave_board(self):
-        if self.s and self.current_board:
-            return (True, "")
-        return (False, "You are not connected to a server and board.")
+    def does_user_have_socket_and_board(self):
+        match (self.s and self.current_board):
+            case (None, None):
+                return (False, "You are not connected to a server or board.")
+            case (None, _):
+                return (False, "You are not connected to a server.")
+            case (_, None):
+                return (False, "You are not connected to a board.")
+        return (True, "")
 
     def post_leave_board(self, message_receive):
         """Leaves the current board."""
@@ -183,7 +181,24 @@ class Client:
                 successful_leave = False
                 response_output = "Unknown error"
         return (successful_leave, response_output)
-
+    
+    def post_post_to_board(self, message_receive):
+        successful_post = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                response_output = f'Posted to board {message_receive.body["board_name"]}'
+            case (False, ServerErrorCode.BoardDoesntExist):
+                successful_post = False
+                response_output = "The board you tried to post to doesn't exist."
+            case (False, ServerErrorCode.UserDoesntExist):
+                successful_post = False
+                response_output = f'The user with id: {self.id} doesnt exist.'
+            case (_, _):
+                successful_post = False
+                response_output = "Unknown error"
+        return (successful_post, response_output)
+        
     def pre_change_username(self, new_username):
         if not self.s:  # if not connected to a server it doesn't need update
             self.username = new_username
@@ -208,12 +223,7 @@ class Client:
                 response_output = "Unknown error"
         return (successful_change_username, response_output)
 
-    def pre_get_users_in_board(self):
-        if self.s and self.current_board:
-            return (True, "")
-        return (False, "You are not connected to a server and board.")
-
-    def post_get_users_in_board(self, message_receive: MessageReceive):
+    def post_get_users_in_board(self, message_receive):
         successful_get_users = True
         response_output = ""
         match (message_receive.is_success, server_error_code_from_response(message_receive)):
@@ -223,13 +233,43 @@ class Client:
             case (False, ServerErrorCode.BoardDoesntExist):
                 successful_get_users = False
                 response_output = "The board you tried to get users from doesn't exist."
+            case (False, ServerErrorCode.UserDoesntExist):
+                successful_get_users = False
+                response_output = f'The user with id: {self.id} doesnt exist.'
             case (_, _):
                 successful_get_users = False
                 response_output = "Unknown error"
         return (successful_get_users, response_output)
 
-    def post_user_posted_to_board(self, data):
-        pass
+    def post_user_posted_to_board(self, message_receive):
+        successful_user_posted = True
+        response_output = f'User: {message_receive.body["username"]} posted to board {message_receive.body["board_name"]}. Do /getposts to view their post.'
+        return (successful_user_posted, response_output)
+
+    def post_get_posts_from_board(self, message_receive):
+        successful_get_posts = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                posts = message_receive.body["posts"]
+                response_output = f"Posts in board: '{self.current_board}':"
+                for post in posts:
+                    timestamp = post["time"]
+                    formatted_time = datetime.utcfromtimestamp(timestamp).strftime('%m/%d %H:%M')
+                    response_output = response_output + '\n' + f'{post["username"]}: {post["content"]} ({formatted_time})'
+            case (False, ServerErrorCode.BoardDoesntExist):
+                successful_get_posts = False
+                response_output = "The board you tried to get users from doesn't exist."
+            case (False, ServerErrorCode.UserDoesntExist):
+                successful_get_posts = False
+                response_output = f'The user with id: {self.id} doesnt exist.'
+            case (False, ServerErrorCode.NoPosts):
+                successful_get_posts = True
+                response_output = "There are no posts on this board at the moment."
+            case (_, _):
+                successful_get_posts = False
+                response_output = "Unknown error"
+        return (successful_get_posts, response_output)        
 
     def handle_commands(self):
         prompt_response = ""
@@ -300,23 +340,35 @@ class Client:
                 )
 
             elif compare_commands(UserCommand.Leave, prompt_response):
-                message_will_be_sent, request_message = self.pre_leave_board()
+                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
                 message_body = {"id": self.id, "board_name": self.current_board}
                 message.create_message(
                     self.username, ClientCommand.Leave, "", message_body
                 )
 
             elif compare_commands(UserCommand.Users, prompt_response):
+                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
                 message_body = {"id": self.id, "board_name": self.current_board}
                 message.create_message(
                     self.username, ClientCommand.Users, "", message_body
                 )
-                message_will_be_sent, request_message = self.pre_get_users_in_board()
+
+            elif compare_commands(UserCommand.Post, prompt_response):
+                content = prompt_response[5:]
+                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
+                message_body = {"id": self.id, "board_name": self.current_board, "content": content}
+                message.create_message(self.username, ClientCommand.Post, "", message_body)
+
+            elif compare_commands(UserCommand.GetPosts, prompt_response):
+                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
+                message_body =  {"id": self.id, "board_name": self.current_board}
+                message.create_message(self.username, ClientCommand.GetPosts, "", message_body)
 
             elif compare_commands(UserCommand.Exit, prompt_response):
                 request_message = "bye!"
                 self.disconnect()
                 break  # this doesn't work
+
             elif prompt_response == "":
                 continue
             else:
@@ -340,38 +392,45 @@ class Client:
 
     def router(self):  # Routes received responses to the correct post_ method
         while True:
-            if self.sentMessages != deque() and self.receviedMessages != deque():
+            sent_message = None
+            received_message = None
+            if self.receviedMessages != deque():
                 with lock:
-                    sent_message = self.sentMessages.popleft()
                     received_message = self.receviedMessages.popleft()
                     success = None
                     response_output = ""
-                    if sent_message.id == received_message.acknowledgement_id:
+                    if self.sentMessages != deque():
+                        sent_message = self.sentMessages.popleft()
+                        if sent_message.id == received_message.acknowledgement_id:
+                            match received_message.command:
+                                case ServerCommand.Connect:
+                                    success, response_output = self.post_connect(received_message)
+                                case ServerCommand.Reconnect:
+                                    success, response_output = self.post_reconnect(received_message)
+                                case ServerCommand.SetUser:
+                                    success, response_output = self.post_change_username(received_message)
+                                case ServerCommand.Join:
+                                    success, response_output = self.post_join(received_message)
+                                case ServerCommand.Users:
+                                    success, response_output = self.post_get_users_in_board(received_message)
+                                case ServerCommand.Leave:
+                                    success, response_output = self.post_leave_board(received_message)
+                                case ServerCommand.Post:
+                                    success, response_output = self.post_post_to_board(received_message)
+                                case ServerCommand.GetPosts:
+                                    success, response_output = self.post_get_posts_from_board(received_message)
+                                case ServerCommand.Invalid:
+                                    success = False
+                                    response_output = "The provided command was invalid."
+
+                    if received_message.run_without_id_check:
                         match received_message.command:
-                            case ServerCommand.Connect:
-                                success, response_output = self.post_connect(received_message)
-                            case ServerCommand.Reconnect:
-                                success, response_output = self.post_reconnect(received_message)
-                            case ServerCommand.SetUser:
-                                success, response_output = self.post_change_username(received_message)
-                            case ServerCommand.Join:
-                                success, response_output = self.post_join(received_message)
-                            case ServerCommand.Users:
-                                success, response_output = self.post_get_users_in_board(received_message)
-                            case ServerCommand.Leave:
-                                success, response_output = self.post_leave_board(received_message)
-                            case ServerCommand.Invalid:
-                                success = False
-                                response_output = "The provided command was invalid."
-
-                    elif received_message.run_without_id_check:
-                        match sent_message.command:
                             case ServerCommand.PostMade:
-                                self.post_user_posted_to_board(received_message)
-                        self.sentMessages.appendleft(sent_message)
-
-                    else:  # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
-                        self.sentMessages.appendleft(sent_message)
+                                success, response_output = self.post_user_posted_to_board(received_message)
+                        if sent_message:
+                            self.sentMessages.appendleft(sent_message)
+                        
+                    if not (received_message.run_without_id_check or sent_message.id == received_message.acknowledgement_id):  # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
                         self.receviedMessages.append(received_message)
                     
                     if success:

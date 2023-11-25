@@ -28,7 +28,7 @@ class Lobby:
         self.get_board_by_name(board_name).users.remove_user(user)
         self.log.add(user.id, "board_leave", board_name)
 
-    def get_board_by_name(self, name: str):
+    def get_board_by_name(self, name: str) -> Board | None:
         for board in self.boards:
             if board.name == name:
                 return board

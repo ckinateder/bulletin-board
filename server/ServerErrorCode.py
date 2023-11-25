@@ -5,3 +5,4 @@ class ServerErrorCode(Enum):
     UserDoesntExist = 2
     InvalidCommand = 3
     BoardDoesntExist = 4
+    NoPosts = 5
