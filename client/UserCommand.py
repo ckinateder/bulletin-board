@@ -7,10 +7,12 @@ class UserCommand(Enum):
     Join = ("join", "<board> - join a board")
     Leave = ("leave", "<board> - leave a board")
     Users = ("users", "<board> - list users on a board")
-    Send = ("send", "<board> <message> - send a message to a board")
     Disconnect = ("disconnect", "disconnect from the server")
     Exit = ("exit", "exit the program")
     Help = ("help", "show this help message")
+    Post = ("post", "<message> - post a message to the current board")
+    GetPosts = ("getposts", "<content> - get the messages that have been posted to a board")
+    Send = ("send", "<message> - idk what this is for")
 
     def get_commands(escape_char:str="/"):
         return [escape_char+command.value[0] for command in UserCommand]
