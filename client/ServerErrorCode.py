@@ -6,6 +6,7 @@ class ServerErrorCode(Enum):
     InvalidCommand = 3
     BoardDoesntExist = 4
     NoPosts = 5
+    BoardExists = 6
 
 def server_error_code_from_response(message_response):
     if message_response.is_success:

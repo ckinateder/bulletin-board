@@ -85,46 +85,50 @@ class Server:
     def handle_change_username_request(self, message_receive):
         user = self.lobby.users.get_user_by_id(message_receive.body["id"])
         new_username = message_receive.body["new_username"]
-        if not user:
-            message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
-            message_send = MessageSend(message_receive.username, ServerCommand.SetUser, False, False, message_receive.id, message_body_send)
-            return message_send
-
-        if self.lobby.does_username_already_exsist(new_username):
-            message_body_send = {"error_code": ServerErrorCode.NameTaken, "new_username": new_username}
-            message_send = MessageSend(user.username, ServerCommand.SetUser, False, False, message_receive.id, message_body_send)
-            return message_send
-
-        user.username = new_username
-        message_body_send = {"id": user.id, "new_username": new_username}
-        self.lobby.log.add(user.id, "username_change", user.username)
-        message_send = MessageSend(user.username, ServerCommand.SetUser, False, True, message_receive.id, message_body_send)
+        match (user, self.lobby.does_username_already_exsist(new_username)):
+            case (None, _):
+                message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
+                message_send = MessageSend(message_receive.username, ServerCommand.SetUser, False, False, message_receive.id, message_body_send)
+            case (_, True):
+                message_body_send = {"error_code": ServerErrorCode.NameTaken, "new_username": new_username}
+                message_send = MessageSend(user.username, ServerCommand.SetUser, False, False, message_receive.id, message_body_send)
+            case (_, _):
+                user.username = new_username
+                message_body_send = {"id": user.id, "new_username": new_username}
+                self.lobby.log.add(user.id, "username_change", user.username)
+                message_send = MessageSend(user.username, ServerCommand.SetUser, False, True, message_receive.id, message_body_send)
         return message_send
 
     def handle_join_board_request(self, message_receive):
         user = self.lobby.users.get_user_by_id(message_receive.body["id"])
-        board_name = message_receive.body["board_name"]
-        if not user:
-            message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
-            message_send = MessageSend(message_receive.username, ServerCommand.Join, False, False, message_receive.id, message_body_send)
-            return message_send
-
-        self.lobby.add_user_to_board(user, board_name)
-        message_body_send = {"board_name": board_name}
-        message_send = MessageSend(user.username, ServerCommand.Join, False, True, message_receive.id, message_body_send)
+        board = self.lobby.get_board_by_name(message_receive.body["board_name"])
+        match (user, board):
+                case (None, _):
+                    message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Join, False, False, message_receive.id, message_body_send)
+                case (_, None):
+                    message_body_send = {"error_code": ServerErrorCode.BoardDoesntExist}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Join, False, False, message_receive.id, message_body_send)
+                case(_, _):
+                    self.lobby.add_user_to_board(user, board.name)
+                    message_body_send = {"board_name": board.name}
+                    message_send = MessageSend(user.username, ServerCommand.Join, False, True, message_receive.id, message_body_send)
         return message_send
 
     def handle_leave_board_request(self, message_receive):
         user = self.lobby.users.get_user_by_id(message_receive.body["id"])
-        board_name = message_receive.body["board_name"]
-        if not user:
-            message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
-            message_send = MessageSend(message_receive.username, ServerCommand.Leave, False, False, message_receive.id, message_body_send)
-            return message_send
-
-        self.lobby.remove_user_from_board(user, board_name)
-        message_body_send = {"board_name": board_name}
-        message_send = MessageSend(user.username, ServerCommand.Leave, False, True, message_receive.id, message_body_send)
+        board = self.lobby.get_board_by_name(message_receive.body["board_name"])
+        match (user, board):
+                case (None, _):
+                    message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Leave, False, False, message_receive.id, message_body_send)
+                case (_, None):
+                    message_body_send = {"error_code": ServerErrorCode.BoardDoesntExist}
+                    message_send = MessageSend(message_receive.username, ServerCommand.Leave, False, False, message_receive.id, message_body_send)
+                case (_, _):
+                    self.lobby.remove_user_from_board(user, board.name)
+                    message_body_send = {"board_name": board.name}
+                    message_send = MessageSend(user.username, ServerCommand.Leave, False, True, message_receive.id, message_body_send)
         return message_send
 
     def handle_get_users_request(self, message_receive):
@@ -184,6 +188,31 @@ class Server:
                     message_send = MessageSend(message_receive.username, ServerCommand.GetPosts, False, True, message_receive.id, message_body_send)
 
         return message_send
+    
+    def handle_create_board_request(self, message_receive):
+        user = self.lobby.users.get_user_by_id(message_receive.body["id"])
+        new_board_name = message_receive.body["new_board_name"]
+        current_board_name = message_receive.body["current_board_name"]
+        board_exists = self.lobby.board_exists(new_board_name)
+        match (user, board_exists):
+            case (None, _):
+                message_body_send = {"error_code": ServerErrorCode.UserDoesntExist}
+                message_send = MessageSend(message_receive.username, ServerCommand.CreateBoard, False, False, message_receive.id, message_body_send)
+            case (_, True):
+                message_body_send = {"error_code": ServerErrorCode.BoardExists}
+                message_send = MessageSend(message_receive.username, ServerCommand.CreateBoard, False, False, message_receive.id, message_body_send)
+            case (_, _):
+                if current_board_name:
+                    self.lobby.remove_user_from_board(user, current_board_name)
+                self.lobby.new_board(new_board_name)
+                self.lobby.add_user_to_board(user, new_board_name)
+                message_body_send = {"board_name": new_board_name}
+                message_send = MessageSend(message_receive.username, ServerCommand.CreateBoard, False, True, message_receive.id, message_body_send)
+                message_body_send_to_all = {"username": message_receive.username, "board_name": new_board_name}
+                message_send_to_all = MessageSend(message_receive.username, ServerCommand.BoardCreated, True, True, "", message_body_send_to_all)
+                users_in_lobby = self.lobby.get_users()
+                self.send_to_all_clients(message_send_to_all, users_in_lobby)
+        return message_send
 
     def handle_invalid_command_request(self, message_receive):
         message_body_send = {"error_code": ServerErrorCode.InvalidCommand}
@@ -210,5 +239,7 @@ class Server:
                 return self.handle_post_request(message_receive)
             case ClientCommand.GetPosts:
                 return self.handle_get_posts_request(message_receive)
+            case ClientCommand.CreateBoard:
+                return self.handle_create_board_request(message_receive)
             case _:
                 return self.handle_invalid_command_request(message_receive)

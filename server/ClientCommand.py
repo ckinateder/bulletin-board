@@ -11,6 +11,7 @@ class ClientCommand(Enum):
     Send = 7
     Post = 8
     GetPosts = 9
+    CreateBoard = 10
 
 def client_command_from_value(value):
     for _, member in ClientCommand.__members__.items():
