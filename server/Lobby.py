@@ -12,6 +12,9 @@ class Lobby:
         self.log = Log()
         self.boards = []
 
+    def get_users(self):
+        return self.users
+
     def new_board(self, name: str):
         self.boards.append(Board(name))
 
@@ -33,6 +36,12 @@ class Lobby:
             if board.name == name:
                 return board
         return None
+    
+    def board_exists(self, name: str) -> bool:
+        for board in self.boards:
+            if board.name == name:
+                return True
+        return False
 
     def does_username_already_exsist(self, username):
         return username in self.users.get_all_usernames()

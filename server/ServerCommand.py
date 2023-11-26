@@ -11,6 +11,8 @@ class ServerCommand(Enum):
     Leave = 7
     PostMade = 8
     GetPosts = 9
+    CreateBoard = 10
+    BoardCreated = 11
     Invalid = 99
 
 

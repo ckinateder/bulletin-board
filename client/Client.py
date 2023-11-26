@@ -1,8 +1,6 @@
 from datetime import datetime
-import json
 import socket
 from collections import deque
-import copy
 from ClientCommand import ClientCommand
 from UserCommand import UserCommand, compare_commands
 from ServerCommand import ServerCommand
@@ -29,6 +27,7 @@ class Client:
         self.current_board = None
         self.sentMessages = deque()
         self.receviedMessages = deque()
+
         self.start()
 
     def validate_username(self, username: str) -> bool:
@@ -135,10 +134,19 @@ class Client:
             print("Invalid host or port.")
             return None
 
-    def pre_join(self):
+    def is_user_connected(self):
         if self.connected:
             return (True, "")
         return (False, "You are not connected to a server.")
+    
+    def pre_join(self):
+        match (self.connected, self.current_board):
+            case (False, _):
+                return (False, "You are not connected to a server.")
+            case (_, None):
+                return (True, "")
+            case (_, _):
+                return (False, f"You are already connected to board {self.current_board}. Please leave it before joining a new board.")
 
     def post_join(self, message_receive: MessageReceive):
         successful_join = True
@@ -270,6 +278,30 @@ class Client:
                 response_output = "Unknown error"
         return (successful_get_posts, response_output)        
 
+    def post_create_board(self, message_receive):
+        successful_create_board = True
+        response_output = ""
+        match (message_receive.is_success, server_error_code_from_response(message_receive)):
+            case (True, None):
+                new_board_name = message_receive.body["board_name"]
+                self.current_board = new_board_name
+                response_output = f"New board created and joined: '{self.current_board}'"
+            case (False, ServerErrorCode.UserDoesntExist):
+                successful_create_board = False
+                response_output = f'The user with id: {self.id} doesnt exist.'
+            case (False, ServerErrorCode.BoardExists):
+                successful_create_board = False
+                response_output = "The board you attempted to create already exists."
+            case (_, _):
+                successful_create_board = False
+                response_output = "Unknown error"
+        return (successful_create_board, response_output)
+
+    def post_user_created_new_board(self, message_receive):
+        successful_user_created_board = True
+        response_output = f'User: {message_receive.body["username"]} created a new board: {message_receive.body["board_name"]}. Do /join {message_receive.body["board_name"]} to view posts on that board.'
+        return (successful_user_created_board, response_output)
+
     def handle_commands(self):
         prompt_response = ""
         while prompt_response != "/exit":
@@ -363,6 +395,12 @@ class Client:
                 message_body =  {"id": self.id, "board_name": self.current_board}
                 message.create_message(self.username, ClientCommand.GetPosts, "", message_body)
 
+            elif compare_commands(UserCommand.CreateBoard, prompt_response):
+                new_board_name = prompt_response[10:]
+                message_will_be_sent, request_message = self.is_user_connected()
+                message_body = {"id": self.id, "current_board_name": self.current_board, "new_board_name": new_board_name}
+                message.create_message(self.username, ClientCommand.CreateBoard, "", message_body)
+
             elif compare_commands(UserCommand.Exit, prompt_response):
                 request_message = "bye!"
                 self.disconnect()
@@ -418,6 +456,8 @@ class Client:
                                     success, response_output = self.post_post_to_board(received_message)
                                 case ServerCommand.GetPosts:
                                     success, response_output = self.post_get_posts_from_board(received_message)
+                                case ServerCommand.CreateBoard:
+                                    success, response_output = self.post_create_board(received_message)
                                 case ServerCommand.Invalid:
                                     success = False
                                     response_output = "The provided command was invalid."
@@ -426,6 +466,8 @@ class Client:
                         match received_message.command:
                             case ServerCommand.PostMade:
                                 success, response_output = self.post_user_posted_to_board(received_message)
+                            case ServerCommand.BoardCreated:
+                                success, response_output = self.post_user_created_new_board(received_message)
                         if sent_message:
                             self.sentMessages.appendleft(sent_message)
                         

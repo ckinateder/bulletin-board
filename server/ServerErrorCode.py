@@ -6,3 +6,4 @@ class ServerErrorCode(Enum):
     InvalidCommand = 3
     BoardDoesntExist = 4
     NoPosts = 5
+    BoardExists = 6
