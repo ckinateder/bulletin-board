@@ -13,6 +13,7 @@ class ServerCommand(Enum):
     GetPosts = 9
     CreateBoard = 10
     BoardCreated = 11
+    UserJoinedBoard = 12
     Invalid = 99
 
 

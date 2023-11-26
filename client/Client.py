@@ -148,7 +148,7 @@ class Client:
             case (_, _):
                 return (False, f"You are already connected to board {self.current_board}. Please leave it before joining a new board.")
 
-    def post_join(self, message_receive: MessageReceive):
+    def post_join(self, message_receive):
         successful_join = True
         response_output = ""
         match (message_receive.is_success, server_error_code_from_response(message_receive)):
@@ -162,6 +162,11 @@ class Client:
                 successful_join = False
                 response_output = "Unknown error"
         return (successful_join, response_output)
+
+    def post_user_joined_board(self, message_receive):
+        successful_user_join = True
+        response_output = f"User {message_receive.body["username"]} joined board {message_receive.body["board_name"]}."
+        return (successful_user_join, response_output)
 
     def does_user_have_socket_and_board(self):
         match (self.connected, self.current_board):
@@ -305,6 +310,7 @@ class Client:
     def handle_commands(self):
         prompt_response = ""
         while prompt_response != "/exit":
+            time.sleep(.25)
             prompt_response = input(f"{self.username}> ").strip()
             message = MessageSend()
             message_will_be_sent = False
@@ -468,6 +474,8 @@ class Client:
                                 success, response_output = self.post_user_posted_to_board(received_message)
                             case ServerCommand.BoardCreated:
                                 success, response_output = self.post_user_created_new_board(received_message)
+                            case ServerCommand.UserJoinedBoard:
+                                success, response_output = self.post_user_joined_board(received_message)
                         if sent_message:
                             self.sentMessages.appendleft(sent_message)
                         
@@ -478,7 +486,6 @@ class Client:
                         print(f"Success! {response_output}")
                     else:
                         print(f"Command Failed! {response_output}")
-                    print()
 
     def _receive(self, buffer_size=1024, echo=True):
         try:

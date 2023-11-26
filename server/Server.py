@@ -113,6 +113,10 @@ class Server:
                     self.lobby.add_user_to_board(user, board.name)
                     message_body_send = {"board_name": board.name}
                     message_send = MessageSend(user.username, ServerCommand.Join, False, True, message_receive.id, message_body_send)
+                    message_body_send_to_all = {"username": message_receive.username, "board_name": board.name}
+                    message_send_to_all = MessageSend(user.username, ServerCommand.UserJoinedBoard, True, True, message_receive.id, message_body_send_to_all)
+                    users_in_board = board.get_users()
+                    self.send_to_all_clients(message_send_to_all, users_in_board)
         return message_send
 
     def handle_leave_board_request(self, message_receive):
