@@ -28,16 +28,26 @@ with a message. I was going to use JSON, but I decided to keep it simple for now
 
 ### Client Commands
 
-| Command                  | Description                         | Example                   |
-| ------------------------ | ----------------------------------- | ------------------------- |
-| `/connect <host>:<port>` | connect to host:port                | `/connect localhost:8080` |
-| `/disconnect`            | disconnect from the server          | `/disconnect`             |
-| `/setuser <username>`    | set the username                    | `/setuser calvin`         |
-| `/join <group>`          | join a group                        | `/join group1`            |
-| `/leave <group>`         | leave a group                       | `/leave group1`           |
-| `/users`                 | list all users in the current group | `/users`                  |
+| Command                  | Description                                       | Example                   |
+| ------------------------ | ------------------------------------------------- | ------------------------- |
+| `/connect <host>:<port>` | connect to host:port                              | `/connect localhost:8080` |
+| `/disconnect`            | disconnect from the server                        | `/disconnect`             |
+| `/setuser <username>`    | set the username                                  | `/setuser calvin`         |
+| `/join <board>`          | join a board                                      | `/join default`           |
+| `/leave`                 | leave the user's current board                    | `/leave`                  |
+| `/users`                 | list all users in the current group               | `/users`                  |
+| `/post <content>`        | adds a post to the users current board            | `/post hi`                |
+| `/getposts`              | gets all of the posts from a users current board  | `/getposts`               |
+| `/newboard <board>`      | creates a new board for users to join and post to | `/newboard board2`        |
+| `/help`                  | outputs a list of commands                        | `/help`                   |
 
-**TODO**: add these commands and more | Command | Description | Example | | --- | --- | --- | | `/groups` | list all groups | `/groups` |
+All commands are stored as Enums and passed between server and client as the integer they are paired with. Once recived, the server or
+client parses the command type, and uses pattern matching to determine how to process it. The commands are split between commands the server
+can send the client and commands the client can send the server. Most commands the server returns to the client are identical to the command
+first requested by the client as a recognition that the server recieved the command, but there are several commands that the server sends
+out without and initial request from the client. Because of this the commands are identified as commands sent by the server or client. This
+also helps with readability. In the code you are able to tell whether the command is being sent from the client or server, or whether it has
+been recived from the client or server.
 
 ## Server Design
 
@@ -90,4 +100,9 @@ Server
         "board": "main"
     }
 }
+
+Each response the server returns to the client contains a acknowledgement id. This allows the client to maintain data about the message it sent, and hold onto
+it until the server has responded to the request. This prevents any issues with messages being sent to a client without the client first making any request to the server.
+Unless specifyed by the response from the server, the client waits to process any message received by the server until the response acknowledgement id matches an id from a
+message sent by the client.
 ```

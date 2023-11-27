@@ -13,7 +13,6 @@ class UserCommand(Enum):
     Post = ("post", "<message> - post a message to the current board")
     GetPosts = ("getposts", "<content> - get the messages that have been posted to a board")
     CreateBoard = ("newboard", "<boardname> - creates a new board on the server.")
-    Send = ("send", "<message> - idk what this is for")
 
     def get_commands(escape_char:str="/"):
         return [escape_char+command.value[0] for command in UserCommand]
