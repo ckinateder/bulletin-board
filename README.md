@@ -100,9 +100,9 @@ Server example
         "board": "main"
     }
 }
-
-Each response the server returns to the client contains a acknowledgement id. This allows the client to maintain data about the message it sent, and hold onto
-it until the server has responded to the request. This prevents any issues with messages being sent to a client without the client first making any request to the server.
-Unless specifyed by the response from the server, the client waits to process any message received by the server until the response acknowledgement id matches an id from a
-message sent by the client.
 ```
+
+Each response the server returns to the client contains a acknowledgement id. This allows the client to maintain data about the message it
+sent, and hold onto it until the server has responded to the request. This prevents any issues with messages being sent to a client without
+the client first making any request to the server. Unless specifyed by the response from the server, the client waits to process any message
+received by the server until the response acknowledgement id matches an id from a message sent by the client.
