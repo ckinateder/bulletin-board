@@ -71,7 +71,7 @@ file to pass the host and port the server is on to the client. I'll remove it la
 
 ## Messages
 
-Client
+Client example
 
 ```json
 {
@@ -85,7 +85,7 @@ Client
 }
 ```
 
-Server
+Server example
 
 ```json
 {
