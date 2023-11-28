@@ -66,8 +66,7 @@ Make sure you are in the dev container if you are in VSCode. Otherwise, any stan
 
 From the root directory of this project, start the server with `python server/main.py --host <host> --port <port>`. Then, start the client
 with `python client/main.py`. The client will prompt you to enter your username and then for commands. Type `/connect <host>:<port>` to
-connect to the server. Then, you can type `/disconnect` to disconnect from the server. **For development, I made the server create a `.env`
-file to pass the host and port the server is on to the client. I'll remove it later.**
+connect to the server. Then, you can type `/disconnect` to disconnect from the server.
 
 ## Messages
 
