@@ -29,7 +29,7 @@ class Client:
         self.receviedMessages = deque()
         self.root = Tk()
 
-        self.root.geometry("400x400")
+        self.root.geometry("1000x1000")
         self.root.title(" Bulletin Board ")
         self.current_board_label = Label(text="Current Board: None")
         self.connected_label = Label(text="Connected: False")
@@ -426,14 +426,6 @@ class Client:
             ) = (
                 self.disconnect()
             )  # Message will never be sent for a disconnet command, so there is no need to construct one.
-
-        elif compare_commands(UserCommand.Send, prompt_response):
-            message_body = {"id": self.id,
-                            "message": prompt_response[6:]}
-            message.create_message(
-                self.username, ClientCommand.Send, "", message_body
-            )
-            message_will_be_sent = True
 
         elif compare_commands(UserCommand.Join, prompt_response):
             if len(prompt_response) < 7:
