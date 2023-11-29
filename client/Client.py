@@ -8,13 +8,13 @@ from MessageSend import MessageSend
 from MessageReceive import MessageReceive
 from ServerErrorCode import ServerErrorCode, server_error_code_from_response
 import threading
-import ast
-import sys
+from tkinter import *
 import time
-#import readline
+# import readline
 
 condition = threading.Condition()
 lock = threading.Lock()
+
 
 class Client:
     def __init__(self):
@@ -27,8 +27,56 @@ class Client:
         self.current_board = None
         self.sentMessages = deque()
         self.receviedMessages = deque()
+        self.root = Tk()
 
+        self.root.geometry("400x400")
+        self.root.title(" Bulletin Board ")
+        self.current_board_label = Label(text="Current Board: None")
+        self.connected_label = Label(text="Connected: False")
+        self.help_label = Label(text=self.help())
+        self.enter_user_name_label = Label(
+            text="Enter your username (no spaces or weird chars)")
+        # Grid.rowconfigure(self.root, index=0, weight=1)
+        # Grid.columnconfigure(self.root, index=0, weight=1)
+
+        # Grid.rowconfigure(self.root, index=1, weight=1)
+        # Grid.rowconfigure(self.root, index=2, weight=1)
+        # Grid.rowconfigure(self.root, index=3, weight=1)
+
+        self.inputtxt = Text(self.root, height=5,
+                             width=100,
+                             bg="light yellow")
+        self.Chat = Text(self.root, height=35,
+                         width=100,
+                         bg="light cyan")
+        self.EnterButton = Button(self.root, height=2,
+                                  width=50,
+                                  text="Enter",
+                                  command=lambda: self.handle_commands())
+        self.GetUserButton = Button(self.root, height=2,
+                                    width=50,
+                                    text="Login",
+                                    command=lambda: self.get_username())
+
+        # self.inputtxt.grid(row=0, column=0, sticky="nsew")
+        # self.Chat.grid(row=0, column=0, sticky="nsew")
+        # self.EnterButton.grid(row=2, column=0, sticky="nsew")
+        # self.GetUserButton.grid(row=3, column=0, sticky="nsew")
+
+        self.command_to_send = ""
+        self.current_board_label.pack()
+        self.connected_label.pack()
+        self.enter_user_name_label.pack()
+        self.inputtxt.pack()
+        self.GetUserButton.pack()
         self.start()
+
+    def addText(self, new_output):
+        self.Chat.insert(END, f'\n{new_output}')
+
+    def set_command_to_send(self):
+        self.command_to_send = self.inputtxt.get("1.0", "end-1c")
+        self.inputtxt.delete(1.0, END)
 
     def validate_username(self, username: str) -> bool:
         """Validates the username."""
@@ -39,11 +87,18 @@ class Client:
 
     def get_username(self):
         """Gets the username from the user."""
-        self.username = input("Enter your username (no spaces or weird chars): ")
+        self.enter_user_name_label.config(
+            text=f"Enter your command below")
+        self.username = self.inputtxt.get("1.0", END)
+        self.inputtxt.delete(1.0, END)
         while self.validate_username(self.username) is False:
-            self.username = input(
-                "Come on, man! You knew the rules.\nEnter your username: "
-            )
+            self.addText(
+                "Come on, man! You knew the rules.\nEnter your username: ")
+            self.username = self.inputtxt.get("1.0", "end-1c")
+        self.GetUserButton.pack_forget()
+        self.EnterButton.pack()
+        self.Chat.pack()
+        self.help_label.pack()
 
     def build_client_message(self, command, message_body):
         return MessageSend(self.username, command, "", message_body).get_message()
@@ -71,6 +126,7 @@ class Client:
                 self.username = message_receive.body["username"]
                 self.id = message_receive.body["id"]
                 response_output = f"Your username is '{self.username}'. Your id is '{self.id}'"
+                self.connected_label.config(text=f'Connected:{self.connected}')
             case (False, ServerErrorCode.NameTaken):
                 successful_connect = False
                 response_output = f"Username '{self.username}' already taken. Please change it and try again."
@@ -89,6 +145,7 @@ class Client:
                 self.id = message_receive.body["id"]
                 self.username = message_receive.body["username"]
                 response_output = f"Your username is '{self.username}'. Your id is still '{self.id}'"
+                self.connected_label.config(text=f'Connected:{self.connected}')
             case (False, ServerErrorCode.NameTaken):
                 successful_connect = False
                 response_output = f"Username '{self.username}' already taken. Please change it and try again."
@@ -105,6 +162,8 @@ class Client:
             self.s.close()
             self.s = None
             self.connected = False
+            self.connected_label.config(text=f'Connected:{self.connected}')
+            self.current_board_label.config(text=f'Current Board: None')
             return (
                 False,
                 f"Disconnected from {self.host}:{self.port}. Your id is still '{self.id}', so you may reconnect.",
@@ -112,8 +171,7 @@ class Client:
         return (False, "You are not connected to a server.")
 
     def help(self):
-        print("Commands:")
-        [print("/"+" ".join(command.value)) for command in UserCommand]
+        return "Commands:\n" + "\n".join(["/ " + " ".join(command.value) for command in UserCommand])
 
     def parse_connect(self, prompt_response):
         try:
@@ -131,14 +189,14 @@ class Client:
                     raise ValueError
             return host, int(port)
         except ValueError:
-            print("Invalid host or port.")
+            self.addText("Invalid host or port.")
             return None
 
     def is_user_connected(self):
         if self.connected:
             return (True, "")
         return (False, "You are not connected to a server.")
-    
+
     def pre_join(self):
         match (self.connected, self.current_board):
             case (False, _):
@@ -155,6 +213,8 @@ class Client:
             case (True, None):
                 self.current_board = message_receive.body['board_name']
                 response_output = f"Joined Board: {self.current_board}"
+                self.current_board_label.config(
+                    text=f'Current Board: {self.current_board}')
             case (False, ServerErrorCode.BoardDoesntExist):
                 successful_join = False
                 response_output = "The board you tried to join doesn't exist."
@@ -165,7 +225,7 @@ class Client:
 
     def post_user_joined_board(self, message_receive):
         successful_user_join = True
-        response_output = f"User {message_receive.body["username"]} joined board {message_receive.body["board_name"]}."
+        response_output = f'User {message_receive.body["username"]} joined board {message_receive.body["board_name"]}.'
         return (successful_user_join, response_output)
 
     def does_user_have_socket_and_board(self):
@@ -186,6 +246,8 @@ class Client:
             case (True, None):
                 response_output = f"Left Board: {message_receive.body['board_name']}"
                 self.current_board = None
+                self.current_board_label.config(
+                    text=f'Current Board: None')
             case (False, ServerErrorCode.BoardDoesntExist):
                 successful_leave = False
                 response_output = "The board you tried to leave doesn't exist."
@@ -193,7 +255,7 @@ class Client:
                 successful_leave = False
                 response_output = "Unknown error"
         return (successful_leave, response_output)
-    
+
     def post_post_to_board(self, message_receive):
         successful_post = True
         response_output = ""
@@ -210,7 +272,7 @@ class Client:
                 successful_post = False
                 response_output = "Unknown error"
         return (successful_post, response_output)
-        
+
     def pre_change_username(self, new_username):
         if not self.s:  # if not connected to a server it doesn't need update
             self.username = new_username
@@ -267,8 +329,10 @@ class Client:
                 response_output = f"Posts in board: '{self.current_board}':"
                 for post in posts:
                     timestamp = post["time"]
-                    formatted_time = datetime.utcfromtimestamp(timestamp).strftime('%m/%d %H:%M')
-                    response_output = response_output + '\n' + f'{post["username"]}: {post["content"]} ({formatted_time})'
+                    formatted_time = datetime.utcfromtimestamp(
+                        timestamp).strftime('%m/%d %H:%M')
+                    response_output = response_output + '\n' + \
+                        f'{post["username"]}: {post["content"]} ({formatted_time})'
             case (False, ServerErrorCode.BoardDoesntExist):
                 successful_get_posts = False
                 response_output = "The board you tried to get users from doesn't exist."
@@ -281,7 +345,7 @@ class Client:
             case (_, _):
                 successful_get_posts = False
                 response_output = "Unknown error"
-        return (successful_get_posts, response_output)        
+        return (successful_get_posts, response_output)
 
     def post_create_board(self, message_receive):
         successful_create_board = True
@@ -291,6 +355,8 @@ class Client:
                 new_board_name = message_receive.body["board_name"]
                 self.current_board = new_board_name
                 response_output = f"New board created and joined: '{self.current_board}'"
+                self.current_board_label.config(
+                    text=f'Current Board: {self.current_board}')
             case (False, ServerErrorCode.UserDoesntExist):
                 successful_create_board = False
                 response_output = f'The user with id: {self.id} doesnt exist.'
@@ -308,41 +374,44 @@ class Client:
         return (successful_user_created_board, response_output)
 
     def handle_commands(self):
-        prompt_response = ""
-        while prompt_response != "/exit":
-            time.sleep(.25)
-            prompt_response = input(f"{self.username}> ").strip()
-            message = MessageSend()
+        self.command_to_send = self.inputtxt.get("1.0", "end-1c")
+        self.inputtxt.delete(1.0, END)
+        prompt_response = self.command_to_send
+        self.command_to_send = None
+        message = MessageSend()
+        message_will_be_sent = False
+        request_message = ""
+
+        if compare_commands(UserCommand.Help, prompt_response):
             message_will_be_sent = False
-            request_message = ""
+            request_message = self.help()
 
-            if compare_commands(UserCommand.Help, prompt_response):
-                message_will_be_sent = False
-                self.help()
+        elif compare_commands(UserCommand.Connect, prompt_response):
+            resp = self.parse_connect(prompt_response)
 
-            elif compare_commands(UserCommand.Connect, prompt_response):
-                resp = self.parse_connect(prompt_response)
+            if resp:
+                self.host, self.port = resp
+                message_will_be_sent, request_message = self.pre_connect()
+                if not self.id:
+                    message_body = {
+                        "host": self.host, "port": self.port}
+                    message.create_message(
+                        self.username, ClientCommand.Connect, "", message_body
+                    )
+                else:
+                    message_body = {"id": self.id}
+                    message.create_message(
+                        self.username, ClientCommand.Reconnect, "", message_body
+                    )
 
-                if resp:
-                    self.host, self.port = resp
-                    message_will_be_sent, request_message = self.pre_connect()
-                    if not self.id:
-                        message_body = {"host": self.host, "port": self.port}
-                        message.create_message(
-                            self.username, ClientCommand.Connect, "", message_body
-                        )
-                    else:
-                        message_body = {"id": self.id}
-                        message.create_message(
-                            self.username, ClientCommand.Reconnect, "", message_body
-                        )
-
-            elif compare_commands(UserCommand.Setuser, prompt_response):
-                given_username = prompt_response[9:].strip()
-                if not self.validate_username(given_username):
-                    print("Come on, man! You knew the rules.")
-                    continue
-                message_body = {"id": self.id, "new_username": given_username}
+        elif compare_commands(UserCommand.Setuser, prompt_response):
+            given_username = prompt_response[9:].strip()
+            if not self.validate_username(given_username):
+                self.addText(
+                    "Come on, man! You knew the rules.")
+            else:
+                message_body = {"id": self.id,
+                                "new_username": given_username}
                 message.create_message(
                     self.username, ClientCommand.SetUser, "", message_body
                 )
@@ -350,80 +419,86 @@ class Client:
                     given_username
                 )
 
-            elif compare_commands(UserCommand.Disconnect, prompt_response):
-                (
-                    message_will_be_sent,
-                    request_message,
-                ) = (
-                    self.disconnect()
-                )  # Message will never be sent for a disconnet command, so there is no need to construct one.
-
-            elif compare_commands(UserCommand.Send, prompt_response):
-                message_body = {"id": self.id, "message": prompt_response[6:]}
-                message.create_message(
-                    self.username, ClientCommand.Send, "", message_body
-                )
-                message_will_be_sent = True
-
-            elif compare_commands(UserCommand.Join, prompt_response):
-                if len(prompt_response) < 7:
-                    board_name = "default"  # just for part 1
-                else:
-                    board_name = prompt_response[6:].strip()
-                message_will_be_sent, request_message = self.pre_join()
-                message_body = {"id": self.id, "board_name": board_name}
-                message.create_message(
-                    self.username, ClientCommand.Join, "", message_body
-                )
-
-            elif compare_commands(UserCommand.Leave, prompt_response):
-                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
-                message_body = {"id": self.id, "board_name": self.current_board}
-                message.create_message(
-                    self.username, ClientCommand.Leave, "", message_body
-                )
-
-            elif compare_commands(UserCommand.Users, prompt_response):
-                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
-                message_body = {"id": self.id, "board_name": self.current_board}
-                message.create_message(
-                    self.username, ClientCommand.Users, "", message_body
-                )
-
-            elif compare_commands(UserCommand.Post, prompt_response):
-                content = prompt_response[5:]
-                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
-                message_body = {"id": self.id, "board_name": self.current_board, "content": content}
-                message.create_message(self.username, ClientCommand.Post, "", message_body)
-
-            elif compare_commands(UserCommand.GetPosts, prompt_response):
-                message_will_be_sent, request_message = self.does_user_have_socket_and_board()
-                message_body =  {"id": self.id, "board_name": self.current_board}
-                message.create_message(self.username, ClientCommand.GetPosts, "", message_body)
-
-            elif compare_commands(UserCommand.CreateBoard, prompt_response):
-                new_board_name = prompt_response[10:]
-                message_will_be_sent, request_message = self.is_user_connected()
-                message_body = {"id": self.id, "current_board_name": self.current_board, "new_board_name": new_board_name}
-                message.create_message(self.username, ClientCommand.CreateBoard, "", message_body)
-
-            elif compare_commands(UserCommand.Exit, prompt_response):
-                request_message = "bye!"
+        elif compare_commands(UserCommand.Disconnect, prompt_response):
+            (
+                message_will_be_sent,
+                request_message,
+            ) = (
                 self.disconnect()
-                break  # this doesn't work
+            )  # Message will never be sent for a disconnet command, so there is no need to construct one.
 
-            elif prompt_response == "":
-                continue
+        elif compare_commands(UserCommand.Send, prompt_response):
+            message_body = {"id": self.id,
+                            "message": prompt_response[6:]}
+            message.create_message(
+                self.username, ClientCommand.Send, "", message_body
+            )
+            message_will_be_sent = True
+
+        elif compare_commands(UserCommand.Join, prompt_response):
+            if len(prompt_response) < 7:
+                board_name = "default"  # just for part 1
             else:
-                message_will_be_sent = False
-                request_message = "Invalid Command"
-            
-            print(request_message)
-            if message_will_be_sent:
-                outbound_message = message.get_message()
-                with lock:
-                    self.sentMessages.append(message)
-                self._send(outbound_message)
+                board_name = prompt_response[6:].strip()
+            message_will_be_sent, request_message = self.pre_join()
+            message_body = {"id": self.id, "board_name": board_name}
+            message.create_message(
+                self.username, ClientCommand.Join, "", message_body
+            )
+
+        elif compare_commands(UserCommand.Leave, prompt_response):
+            message_will_be_sent, request_message = self.does_user_have_socket_and_board()
+            message_body = {"id": self.id,
+                            "board_name": self.current_board}
+            message.create_message(
+                self.username, ClientCommand.Leave, "", message_body
+            )
+
+        elif compare_commands(UserCommand.Users, prompt_response):
+            message_will_be_sent, request_message = self.does_user_have_socket_and_board()
+            message_body = {"id": self.id,
+                            "board_name": self.current_board}
+            message.create_message(
+                self.username, ClientCommand.Users, "", message_body
+            )
+
+        elif compare_commands(UserCommand.Post, prompt_response):
+            content = prompt_response[5:]
+            message_will_be_sent, request_message = self.does_user_have_socket_and_board()
+            message_body = {
+                "id": self.id, "board_name": self.current_board, "content": content}
+            message.create_message(
+                self.username, ClientCommand.Post, "", message_body)
+
+        elif compare_commands(UserCommand.GetPosts, prompt_response):
+            message_will_be_sent, request_message = self.does_user_have_socket_and_board()
+            message_body = {"id": self.id,
+                            "board_name": self.current_board}
+            message.create_message(
+                self.username, ClientCommand.GetPosts, "", message_body)
+
+        elif compare_commands(UserCommand.CreateBoard, prompt_response):
+            new_board_name = prompt_response[10:]
+            message_will_be_sent, request_message = self.is_user_connected()
+            message_body = {
+                "id": self.id, "current_board_name": self.current_board, "new_board_name": new_board_name}
+            message.create_message(
+                self.username, ClientCommand.CreateBoard, "", message_body)
+
+        elif compare_commands(UserCommand.Exit, prompt_response):
+            request_message = "bye!"
+            self.disconnect()
+            # this doesn't work
+        else:
+            message_will_be_sent = False
+            request_message = "Invalid Command: Use /help to learn commands"
+
+        self.addText(request_message)
+        if message_will_be_sent:
+            outbound_message = message.get_message()
+            with lock:
+                self.sentMessages.append(message)
+            self._send(outbound_message)
 
     def handle_inbound_responses(self):
         while True:
@@ -447,23 +522,32 @@ class Client:
                         if sent_message.id == received_message.acknowledgement_id:
                             match received_message.command:
                                 case ServerCommand.Connect:
-                                    success, response_output = self.post_connect(received_message)
+                                    success, response_output = self.post_connect(
+                                        received_message)
                                 case ServerCommand.Reconnect:
-                                    success, response_output = self.post_reconnect(received_message)
+                                    success, response_output = self.post_reconnect(
+                                        received_message)
                                 case ServerCommand.SetUser:
-                                    success, response_output = self.post_change_username(received_message)
+                                    success, response_output = self.post_change_username(
+                                        received_message)
                                 case ServerCommand.Join:
-                                    success, response_output = self.post_join(received_message)
+                                    success, response_output = self.post_join(
+                                        received_message)
                                 case ServerCommand.Users:
-                                    success, response_output = self.post_get_users_in_board(received_message)
+                                    success, response_output = self.post_get_users_in_board(
+                                        received_message)
                                 case ServerCommand.Leave:
-                                    success, response_output = self.post_leave_board(received_message)
+                                    success, response_output = self.post_leave_board(
+                                        received_message)
                                 case ServerCommand.Post:
-                                    success, response_output = self.post_post_to_board(received_message)
+                                    success, response_output = self.post_post_to_board(
+                                        received_message)
                                 case ServerCommand.GetPosts:
-                                    success, response_output = self.post_get_posts_from_board(received_message)
+                                    success, response_output = self.post_get_posts_from_board(
+                                        received_message)
                                 case ServerCommand.CreateBoard:
-                                    success, response_output = self.post_create_board(received_message)
+                                    success, response_output = self.post_create_board(
+                                        received_message)
                                 case ServerCommand.Invalid:
                                     success = False
                                     response_output = "The provided command was invalid."
@@ -471,30 +555,39 @@ class Client:
                     if received_message.run_without_id_check:
                         match received_message.command:
                             case ServerCommand.PostMade:
-                                success, response_output = self.post_user_posted_to_board(received_message)
+                                success, response_output = self.post_user_posted_to_board(
+                                    received_message)
                             case ServerCommand.BoardCreated:
-                                success, response_output = self.post_user_created_new_board(received_message)
+                                success, response_output = self.post_user_created_new_board(
+                                    received_message)
                             case ServerCommand.UserJoinedBoard:
-                                success, response_output = self.post_user_joined_board(received_message)
+                                success, response_output = self.post_user_joined_board(
+                                    received_message)
                         if sent_message:
                             self.sentMessages.appendleft(sent_message)
-                        
-                    if not (received_message.run_without_id_check or sent_message.id == received_message.acknowledgement_id):  # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
+
+                    # If the ids don't match, and the recieved message is not set to run without id check, then reset the sent message queue and put the recieved message to the back of the queue.
+                    if not (received_message.run_without_id_check or sent_message.id == received_message.acknowledgement_id):
                         self.receviedMessages.append(received_message)
-                    
+
                     if success:
-                        print(f"Success! {response_output}")
+                        # print(f"Success! {response_output}")
+                        self.addText(f"Sucess! {response_output}")
+
                     else:
-                        print(f"Command Failed! {response_output}")
+                        # print(f"Command Failed! ")
+                        self.addText(
+                            f"Commmand Failed! {response_output}")
 
     def _receive(self, buffer_size=1024, echo=True):
         try:
             data = self.s.recv(buffer_size).decode("utf-8").strip()
             if echo:
-                print(f"receieved '{data}' from {self.s.getpeername()}")
+                self.addText(
+                    f"receieved '{data}' from {self.s.getpeername()}")
             if not data:
                 self.s.close()
-                print(f"Connection from {self.host} closed.")
+                self.addText(f"Connection from {self.host} closed.")
                 self.s = None
             return data
         except (OSError, ConnectionAbortedError):
@@ -504,22 +597,23 @@ class Client:
         if self.s:
             self.s.sendall(data.encode())
             if echo:
-                print(f"sent '{data}' to {self.s.getpeername()}")
+                self.addText(
+                    f"sent '{data}' to {self.s.getpeername()}")
         else:
-            print("You are not connected to a server.")
+            self.addText("You are not connected to a server.")
 
     def start(self):
-        self.get_username()
-
         router_thread = threading.Thread(target=self.router)
-        receive_message_thread = threading.Thread(target=self.handle_inbound_responses)
+        receive_message_thread = threading.Thread(
+            target=self.handle_inbound_responses)
 
         router_thread.start()
         receive_message_thread.start()
+
         try:
-            self.handle_commands()
+            self.root.mainloop()
         except KeyboardInterrupt:
             pass
-        print("No longer handling commands. Closing client...")
+        self.addText("No longer handling commands. Closing client...")
         router_thread.join()
         receive_message_thread.join()
