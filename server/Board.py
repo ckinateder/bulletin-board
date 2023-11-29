@@ -15,7 +15,7 @@ class Board:
 
     def get_users(self):
         return self.users
-    
+
     def get_posts(self):
         posts = []
         for post in self.posts:

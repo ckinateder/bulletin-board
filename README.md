@@ -1,5 +1,9 @@
 # bulletin-board
 
+Calvin Kinateder
+Nate Louder
+Jimmy German
+
 ## Description
 
 ### Part 1
